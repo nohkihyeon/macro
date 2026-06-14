@@ -2,6 +2,9 @@
 
 > 실시간 국내·글로벌 증시 지표 대시보드 — 코스피·코스닥, 금리, 환율, 원자재, 수급, 시총 트리맵을 한 화면에서.
 
+🔗 **라이브 데모:** https://signalboard-smx1.onrender.com
+> ⏱ 무료 호스팅이라 15분 미사용 후 첫 접속은 깨어나는 데 30~50초 걸립니다.
+
 Node.js(Express) 백엔드가 **Yahoo Finance**와 **네이버 금융**에서 데이터를 수집해 JSON API로 제공하고, 정적 프론트엔드가 위젯 그리드로 시각화합니다. 라이브 데이터는 **LIVE** 배지, 합성 샘플은 **샘플** 배지로 구분됩니다.
 
 ---
@@ -19,6 +22,47 @@ Node.js(Express) 백엔드가 **Yahoo Finance**와 **네이버 금융**에서 �
 
 ---
 
+## 🏗 아키텍처
+
+```mermaid
+flowchart TD
+    subgraph B["① 브라우저 · 정적 프론트엔드 (빌드 없음)"]
+        UI["index.html · app.jsx · charts.jsx<br/>data.js · widgets.jsx"]
+    end
+    subgraph S["② Render · Node.js / Express (server.js)"]
+        API["API 라우트<br/>/api/series · /api/quotes · /api/treemap · /api/global<br/>/api/investors · /api/breadth · /api/health"]
+        CA["캐시<br/>인메모리 + cache/investors-daily.json"]
+    end
+    subgraph P["③ pipeline"]
+        SRC["sources.js · 저수준 페처<br/>axios · cheerio · iconv-lite"]
+        CAT["catalog.js · 지표↔소스 매핑 · 합성 폴백"]
+    end
+    Y["Yahoo Finance"]
+    N["네이버 금융<br/>EUC-KR"]
+    T["TradingView<br/>스캐너"]
+
+    UI -->|"fetch /api/* (동일 오리진)"| API
+    API --> CA
+    API --> SRC
+    SRC --> CAT
+    SRC -->|HTTPS| Y
+    SRC -->|스크래핑| N
+    SRC -->|HTTPS| T
+```
+
+> 편집 가능한 원본 다이어그램: **[architecture.drawio](architecture.drawio)** (draw.io / VS Code Draw.io 확장에서 열기)
+
+**왜 백엔드가 필요한가** — 브라우저에서 Yahoo·네이버를 직접 호출하면 CORS에 막힙니다. `server.js`가 데이터를 대신 수집(프록시)·캐싱하므로, GitHub Pages 같은 순수 정적 호스팅만으로는 실데이터가 들어오지 않습니다. 그래서 Node 서버를 띄울 수 있는 Render에 배포합니다.
+
+| 계층 | 역할 |
+|------|------|
+| ① 브라우저 | 정적 파일을 그대로 렌더(빌드 스텝 없음). `/api/*`를 호출해 위젯에 LIVE 데이터 주입, 실패 시 합성 샘플 유지 |
+| ② Express | 정적 서빙 + API 엔드포인트 + 소스별 캐시(금리 1시간, 수급 5분 등) |
+| ③ pipeline | `sources.js`가 외부 소스를 긁고, `catalog.js`가 지표↔소스를 매핑·합성 폴백 |
+| ④ 외부 소스 | Yahoo Finance, 네이버 금융, TradingView 스캐너 |
+
+---
+
 ## 🧱 기술 스택
 
 | 영역 | 사용 |
@@ -27,6 +71,7 @@ Node.js(Express) 백엔드가 **Yahoo Finance**와 **네이버 금융**에서 �
 | 스크래핑 | axios, cheerio, iconv-lite (네이버 EUC-KR 디코딩) |
 | 프론트 | 정적 HTML/JSX + ApexCharts + Pretendard (별도 빌드 스텝 없음 — 정적 파일 그대로 서빙) |
 | 데이터 소스 | Yahoo Finance API, 네이버 금융, TradingView 스캐너 |
+| 배포 | Render (Web Service, 무료 플랜) |
 
 ---
 
@@ -70,13 +115,10 @@ npm run check:json   # JSON 출력 (CI/모니터링용)
 
 ## ☁️ 웹에 배포하기 (Render — 무료)
 
-이 앱은 **백엔드 서버가 필요**합니다. 브라우저에서 Yahoo·네이버를 직접 호출하면 CORS에 막히기 때문에, `server.js`가 데이터를 대신 수집(프록시)합니다. 따라서 GitHub Pages 같은 정적 호스팅만으로는 실데이터가 들어오지 않으며, Node 서버를 띄울 수 있는 [Render](https://render.com) 같은 곳에 올립니다.
-
 ### 1) GitHub에 푸시
 
 ```powershell
 git remote add origin https://github.com/<사용자명>/<레포명>.git
-git branch -M main
 git push -u origin main
 ```
 
@@ -101,7 +143,7 @@ git push -u origin main
 배포가 끝나면 `https://<서비스명>.onrender.com` 주소로 접속됩니다. 이후 `main` 브랜치에 push할 때마다 **자동 재배포**됩니다.
 
 > ⚠️ **무료 플랜 참고**
-> - 15분간 요청이 없으면 서버가 잠들고(sleep), 다음 첫 접속 시 깨어나는 데 약 30~50초가 걸립니다.
+> - 15분간 요청이 없으면 서버가 잠들고(sleep), 다음 첫 접속 시 깨어나는 데 약 30~50초가 걸립니다. (항상 빠르게 쓰려면 유료 플랜 또는 UptimeRobot 같은 핑 서비스로 우회)
 > - 디스크는 휘발성이라 [cache/](cache/) 의 일별 수급 캐시는 재배포 시 초기화됩니다(자동 재수집되므로 문제 없음).
 
 ---
@@ -148,6 +190,7 @@ macro/
 │  ├─ data.js             지표 카탈로그 · 포맷터 · 라이브 페치 + 폴백
 │  ├─ charts.jsx          SVG 차트 + Apex 패널
 │  └─ widgets.jsx         위젯 카드 + 추가 모달
+├─ architecture.drawio    아키텍처 다이어그램 (편집용 원본)
 ├─ render.yaml            Render 배포 설정 (Blueprint)
 ├─ start.bat / start.ps1  로컬 실행 스크립트
 ├─ api_spec.md            API 규격서
