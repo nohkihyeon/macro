@@ -1,0 +1,20 @@
+{
+  "name": "signalboard-dashboard",
+  "version": "2.0.0",
+  "description": "시그널보드 — 실시간 국내·글로벌 증시 지표 대시보드",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "check": "node pipeline/check.js",
+    "check:json": "node pipeline/check.js --json"
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "cheerio": "^1.0.0-rc.12",
+    "express": "^5.2.1",
+    "iconv-lite": "^0.6.3"
+  }
+}

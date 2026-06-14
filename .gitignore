@@ -1,0 +1,20 @@
+# 의존성 (Render가 빌드 시 npm install로 재생성)
+node_modules/
+
+# 런타임 디스크 캐시 (server.js가 자동 재생성 — 커밋 불필요)
+cache/
+
+# 환경 변수 (비밀값은 Render 대시보드에 등록)
+.env
+.env.local
+.env.*.local
+
+# 로그
+*.log
+npm-debug.log*
+
+# OS / 에디터
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,21 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# 사용법: Render 대시보드 → New + → Blueprint → 이 레포 선택
+#         아래 설정대로 웹 서비스가 자동 생성됩니다.
+#
+# (Blueprint 없이 수동 생성해도 됨: New + → Web Service →
+#  Build = npm install, Start = node server.js)
+services:
+  - type: web
+    name: signalboard
+    runtime: node
+    plan: free
+    region: singapore # 무료 플랜 중 한국에서 가장 가까운 리전
+    buildCommand: npm install
+    startCommand: node server.js
+    autoDeploy: true # main 브랜치 push마다 자동 재배포
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NO_OPEN # 서버 환경에선 브라우저 자동 오픈 비활성화
+        value: "1"
