@@ -12,13 +12,13 @@
         <mxCell id="a1" value="index.html&#10;셸·ApexCharts·테마" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="l1">
           <mxGeometry x="15" y="48" width="140" height="55" as="geometry" />
         </mxCell>
-        <mxCell id="a2" value="app.jsx&#10;탭·KPI·드래그·자동갱신" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="l1">
+        <mxCell id="a2" value="app.jsx · panels.jsx · dollar.jsx&#10;탭·KPI·패널·달러 탭·알림" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="l1">
           <mxGeometry x="165" y="48" width="140" height="55" as="geometry" />
         </mxCell>
-        <mxCell id="a3" value="charts.jsx&#10;SVG 차트 + Apex 패널" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="l1">
+        <mxCell id="a3" value="charts.jsx&#10;SVG 차트 + Apex 패널 (제자리 갱신)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="l1">
           <mxGeometry x="315" y="48" width="140" height="55" as="geometry" />
         </mxCell>
-        <mxCell id="a4" value="data.js · widgets.jsx&#10;카탈로그·폴백·위젯" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="l1">
+        <mxCell id="a4" value="data.js · widgets.jsx&#10;LiveStore(SSE)·리소스 캐시·위젯" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="l1">
           <mxGeometry x="465" y="48" width="140" height="55" as="geometry" />
         </mxCell>
 
@@ -26,13 +26,13 @@
         <mxCell id="l2" value="② Render 호스팅 — Node.js / Express (server.js)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;fontStyle=1;fontSize=13;arcSize=6;" vertex="1" parent="1">
           <mxGeometry x="115" y="220" width="620" height="155" as="geometry" />
         </mxCell>
-        <mxCell id="b1" value="정적 서빙&#10;express.static(public)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;" vertex="1" parent="l2">
+        <mxCell id="b1" value="정적 서빙 + gzip&#10;express.static · compression" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;" vertex="1" parent="l2">
           <mxGeometry x="15" y="40" width="185" height="45" as="geometry" />
         </mxCell>
-        <mxCell id="b3" value="캐시 레이어&#10;인메모리 + cache/investors-daily.json (디스크)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;" vertex="1" parent="l2">
+        <mxCell id="b3" value="collector + 캐시&#10;장 상태별 주기 · TTL/SWR/single-flight · cache/*.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;" vertex="1" parent="l2">
           <mxGeometry x="210" y="40" width="395" height="45" as="geometry" />
         </mxCell>
-        <mxCell id="b2" value="API 라우트:  /api/series/:id · /api/quotes · /api/treemap · /api/global · /api/investors · /api/investors/weekly · /api/breadth · /api/health" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eafaf1;strokeColor=#82b366;fontSize=11;" vertex="1" parent="l2">
+        <mxCell id="b2" value="API:  /api/stream (SSE) · /api/snapshot · /api/history/:id · /api/flows · /api/dollar · /api/global · /api/treemap · /api/stocks/* · /api/health  (+ 예전 /api/series · quotes · investors 호환)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eafaf1;strokeColor=#82b366;fontSize=11;" vertex="1" parent="l2">
           <mxGeometry x="15" y="95" width="590" height="45" as="geometry" />
         </mxCell>
 
@@ -40,18 +40,18 @@
         <mxCell id="l3" value="③ pipeline" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;verticalAlign=top;fontStyle=1;fontSize=13;arcSize=6;" vertex="1" parent="1">
           <mxGeometry x="115" y="435" width="620" height="95" as="geometry" />
         </mxCell>
-        <mxCell id="c1" value="sources.js&#10;저수준 페처 (axios · cheerio · iconv-lite)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="l3">
+        <mxCell id="c1" value="sources/naver.js · http.js&#10;배치 JSON API · keep-alive · 재시도 · 서킷 브레이커" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="l3">
           <mxGeometry x="15" y="40" width="290" height="42" as="geometry" />
         </mxCell>
-        <mxCell id="c2" value="catalog.js&#10;지표↔소스 매핑 · 합성(샘플) 폴백" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="l3">
+        <mxCell id="c2" value="instruments · score · insights · dollar&#10;지표 카탈로그 · MacroScore · 신호 · 달러 타이밍" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="l3">
           <mxGeometry x="315" y="40" width="290" height="42" as="geometry" />
         </mxCell>
 
         <!-- ④ 외부 소스 -->
-        <mxCell id="d1" value="Yahoo Finance API&#10;지수·환율·원자재·차트" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="d1" value="Yahoo Finance&#10;히스토리 백업 전용" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="115" y="600" width="195" height="65" as="geometry" />
         </mxCell>
-        <mxCell id="d2" value="네이버 금융&#10;시총·투자자수급·금리 (EUC-KR)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="d2" value="네이버 증권 JSON API&#10;polling · majors · integration · chart · trend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="328" y="600" width="195" height="65" as="geometry" />
         </mxCell>
         <mxCell id="d3" value="TradingView 스캐너&#10;V-KOSPI 선물 현재가" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
@@ -59,7 +59,7 @@
         </mxCell>
 
         <!-- edges -->
-        <mxCell id="e1" value="fetch /api/* (동일 오리진)" style="endArrow=classic;startArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=10;" edge="1" parent="1" source="l1" target="l2">
+        <mxCell id="e1" value="SSE /api/stream + REST (동일 오리진)" style="endArrow=classic;startArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=10;" edge="1" parent="1" source="l1" target="l2">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e2" value="데이터 수집 호출" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=10;" edge="1" parent="1" source="l2" target="l3">
@@ -68,7 +68,7 @@
         <mxCell id="e3" value="HTTPS" style="endArrow=classic;html=1;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=10;" edge="1" parent="1" source="l3" target="d1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e4" value="스크래핑" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=10;" edge="1" parent="1" source="l3" target="d2">
+        <mxCell id="e4" value="HTTPS (JSON 배치)" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=10;" edge="1" parent="1" source="l3" target="d2">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e5" value="HTTPS" style="endArrow=classic;html=1;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=10;" edge="1" parent="1" source="l3" target="d3">

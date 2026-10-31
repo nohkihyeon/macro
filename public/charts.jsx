@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // charts.jsx
-//   · SVG 위젯 차트: LineChart(크로스헤어) · BarChart · Gauge · SectorList  (UI web 원본)
-//   · ApexCharts 패널: TreemapChart · MultiLineChart · InvestorsChart · DualChart
-//     (macro 이식 — 라이브 /api/* 실패 시 합성 폴백, source 콜백으로 배지 표시)
+//   · SVG 위젯 차트: LineChart(크로스헤어·전일 기준선·실시간 점) · BarChart · Gauge · SectorList
+//   · ApexCharts 패널: Treemap · MultiLine · Investors · Dual · FlowBoard · Candle · YieldCurve
+//     (데이터가 바뀌면 다시 만들지 않고 제자리 갱신 → 깜빡임 없음, 테마가 바뀔 때만 재생성)
 // ─────────────────────────────────────────────────────────────────────────────
 const { useState, useRef, useEffect, useMemo, useCallback } = React;
 
@@ -22,29 +22,60 @@ function useWidth() {
   return [ref, w];
 }
 
-// CSS 변수 읽기 (Apex 테마용)
+// CSS 변수 읽기 (Apex 는 실제 색 문자열이 필요)
 function cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
+function resolveColor(c) {
+  const m = /^var\((--[\w-]+)\)$/.exec(c || '');
+  return m ? cssVar(m[1]) : c;
+}
+function mixHex(a, b, t) {
+  const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const [x, y] = [p(a), p(b)];
+  return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+// 등락률 → 색 (0~5% 구간에서 진해짐)
+function heatColor(v, up, down, neutral) {
+  if (v == null || isNaN(v) || v === 0) return neutral;
+  const base = v > 0 ? up : down;
+  return mixHex(neutral, base, 0.45 + 0.55 * Math.min(1, Math.abs(v) / 5));
+}
+
+function ChartLoading({ height }) {
+  return <div className="chart-loading" style={{ height }}><span className="spinner"></span> 데이터 불러오는 중…</div>;
+}
+function ChartEmpty({ height, text }) {
+  return <div className="chart-empty" style={{ height }}>{text || '데이터 없음'}</div>;
+}
 
 // ─── 라인 차트 ────────────────────────────────────────────────────────────────
-function LineChart({ data, height, color, dec, unit, periodKey, indId }) {
+// baseline: 전일 종가 등 기준선 (있으면 선 색이 기준 대비 상승/하락 색) · live: 마지막 점 깜빡임
+function LineChart(props) {
+  const { data, height } = props;
+  if (!data || !data.values || data.values.length < 2) return <ChartEmpty height={height} />;
+  return <LineChartInner {...props} />;
+}
+
+function LineChartInner({ data, height, color, dec, unit, periodKey, indId, baseline, upColor, downColor, live }) {
   const [wrapRef, W] = useWidth();
   const H = height;
   const [hover, setHover] = useState(null);
   const PAD = { t: 10, b: 22, l: 8, r: 8 };
   const { values, dates } = data;
   const n = values.length;
-  const lo = Math.min(...values), hi = Math.max(...values);
+  let lo = Math.min(...values), hi = Math.max(...values);
+  if (baseline != null) { lo = Math.min(lo, baseline); hi = Math.max(hi, baseline); }
   const range = hi - lo || 1;
   const x = i => PAD.l + (i / (n - 1)) * (W - PAD.l - PAD.r);
   const y = v => PAD.t + (1 - (v - lo) / range) * (H - PAD.t - PAD.b);
+  const stroke = baseline != null && upColor ? (values[n - 1] >= baseline ? upColor : downColor) : color;
   const path = useMemo(() => {
     if (!W) return '';
     let d = `M ${x(0)} ${y(values[0])}`;
     for (let i = 1; i < n; i++) d += ` L ${x(i)} ${y(values[i])}`;
     return d;
-  }, [W, values, H]);
+  }, [W, values, H, lo, hi]);
   const onMove = useCallback(e => {
     const rect = wrapRef.current.getBoundingClientRect();
     const i = Math.round(((e.clientX - rect.left - PAD.l) / (W - PAD.l - PAD.r)) * (n - 1));
@@ -60,8 +91,8 @@ function LineChart({ data, height, color, dec, unit, periodKey, indId }) {
       {W > 0 && (
         <svg width={W} height={H} style={{ display: 'block' }}>
           <defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.18"></stop>
-            <stop offset="100%" stopColor={color} stopOpacity="0"></stop>
+            <stop offset="0%" stopColor={stroke} stopOpacity="0.18"></stop>
+            <stop offset="100%" stopColor={stroke} stopOpacity="0"></stop>
           </linearGradient></defs>
           {yTicks.map((tv, i) => (
             <g key={i}>
@@ -69,14 +100,21 @@ function LineChart({ data, height, color, dec, unit, periodKey, indId }) {
               <text x={W - PAD.r} y={y(tv) - 4} textAnchor="end" className="tick-label">{fmtNum(tv, dec)}</text>
             </g>
           ))}
+          {baseline != null && (
+            <g>
+              <line x1={PAD.l} x2={W - PAD.r} y1={y(baseline)} y2={y(baseline)} className="baseline"></line>
+              <text x={PAD.l + 2} y={y(baseline) < PAD.t + 14 ? y(baseline) + 13 : y(baseline) - 4} className="tick-label">전일 {fmtNum(baseline, dec)}</text>
+            </g>
+          )}
           <path d={`${path} L ${x(n - 1)} ${H - PAD.b} L ${x(0)} ${H - PAD.b} Z`} fill={`url(#${gid})`}></path>
-          <path d={path} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"></path>
+          <path d={path} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"></path>
+          {live && hover == null && <circle cx={x(n - 1)} cy={y(values[n - 1])} r="3.5" fill={stroke} className="live-dot"></circle>}
           <text x={PAD.l} y={H - 6} className="tick-label">{fmtDate(dates[0], periodKey)}</text>
           <text x={W - PAD.r} y={H - 6} textAnchor="end" className="tick-label">{fmtDate(dates[n - 1], periodKey)}</text>
           {hover != null && (
             <g>
               <line x1={x(hover)} x2={x(hover)} y1={PAD.t} y2={H - PAD.b} className="crosshair"></line>
-              <circle cx={x(hover)} cy={y(hv)} r="4.5" fill={color} stroke="var(--card)" strokeWidth="2"></circle>
+              <circle cx={x(hover)} cy={y(hv)} r="4.5" fill={stroke} stroke="var(--card)" strokeWidth="2"></circle>
             </g>
           )}
         </svg>
@@ -92,7 +130,13 @@ function LineChart({ data, height, color, dec, unit, periodKey, indId }) {
 }
 
 // ─── 막대 차트 ────────────────────────────────────────────────────────────────
-function BarChart({ data, height, upColor, downColor, periodKey, unit }) {
+function BarChart(props) {
+  const { data, height } = props;
+  if (!data || !data.values || !data.values.length) return <ChartEmpty height={height} />;
+  return <BarChartInner {...props} />;
+}
+
+function BarChartInner({ data, height, upColor, downColor, periodKey, unit }) {
   const [wrapRef, W] = useWidth();
   const H = height;
   const [hover, setHover] = useState(null);
@@ -172,144 +216,184 @@ function Gauge({ value, height, upColor, downColor }) {
   );
 }
 
-// ─── 업종 등락 리스트 ─────────────────────────────────────────────────────────
-function SectorList({ rows, upColor, downColor }) {
+// ─── 업종 등락 리스트 (상위 n · 하위 n) ───────────────────────────────────────
+function SectorList({ rows, upColor, downColor, split }) {
   const maxAbs = Math.max(...rows.map(r => Math.abs(r.chg))) || 1;
+  const row = r => (
+    <div className="sector-row" key={r.name}>
+      <span className="sector-name" title={r.name}>{r.name}</span>
+      <div className="sector-bar-track">
+        <div className="sector-bar" style={{
+          width: `${(Math.abs(r.chg) / maxAbs) * 50}%`,
+          [r.chg >= 0 ? 'left' : 'right']: '50%',
+          background: r.chg >= 0 ? upColor : downColor,
+        }}></div>
+      </div>
+      <span className="sector-chg" style={{ color: r.chg >= 0 ? upColor : downColor }}>
+        {r.chg >= 0 ? '+' : ''}{r.chg.toFixed(2)}%
+      </span>
+    </div>
+  );
   const sorted = [...rows].sort((a, b) => b.chg - a.chg);
   return (
     <div className="sector-list">
-      {sorted.map(r => (
-        <div className="sector-row" key={r.name}>
-          <span className="sector-name">{r.name}</span>
-          <div className="sector-bar-track">
-            <div className="sector-bar" style={{
-              width: `${(Math.abs(r.chg) / maxAbs) * 50}%`,
-              [r.chg >= 0 ? 'left' : 'right']: '50%',
-              background: r.chg >= 0 ? upColor : downColor,
-            }}></div>
-          </div>
-          <span className="sector-chg" style={{ color: r.chg >= 0 ? upColor : downColor }}>
-            {r.chg >= 0 ? '+' : ''}{r.chg.toFixed(2)}%
-          </span>
-        </div>
-      ))}
+      {split ? sorted.slice(0, split).map(row) : sorted.map(row)}
+      {split && sorted.length > split * 2 && <div className="sector-gap">⋯</div>}
+      {split && sorted.slice(Math.max(split, sorted.length - split)).map(row)}
     </div>
   );
 }
 
 // ─── ApexCharts 공통 베이스 ───────────────────────────────────────────────────
-// build(el) → ApexCharts 인스턴스 옵션. deps 변경 시 재생성.
-function ApexBase({ height, build, deps }) {
+// 데이터가 바뀌면 updateOptions 로 제자리 갱신, rebuildKey(테마)가 바뀔 때만 다시 만든다
+function ApexBase({ height, build, deps, rebuildKey }) {
   const elRef = useRef(null);
   const chartRef = useRef(null);
+  const keyRef = useRef(null);
   useEffect(() => {
     if (!elRef.current || !window.ApexCharts) return;
-    if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
     const opts = build();
     if (!opts) return;
+    if (chartRef.current && keyRef.current === rebuildKey) {
+      chartRef.current.updateOptions(opts, false, false, false);
+      return;
+    }
+    if (chartRef.current) chartRef.current.destroy();
     chartRef.current = new ApexCharts(elRef.current, opts);
     chartRef.current.render();
-    return () => { if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; } };
-  }, deps);
+    keyRef.current = rebuildKey;
+  }, [...deps, rebuildKey]);
+  useEffect(() => () => { if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; } }, []);
   return <div ref={elRef} style={{ height, width: '100%' }} />;
 }
 
-function apexTheme() {
+function apexTheme(colors) {
   const dark = document.documentElement.dataset.theme === 'dark';
   return {
     mode: dark ? 'dark' : 'light',
     text3: cssVar('--text-3') || '#8B95A1',
     line: cssVar('--line') || '#E8EAED',
     card: cssVar('--card') || '#fff',
-    up: cssVar('--accent') || '#3B6EF5',
+    up: resolveColor(colors && colors.up) || '#E5484D',
+    down: resolveColor(colors && colors.down) || '#3470E4',
+    neutral: dark ? '#3A3F47' : '#A8B0BA',
   };
 }
+const apexChart = extra => ({ height: '100%', toolbar: { show: false }, background: 'transparent', fontFamily: 'inherit', animations: { enabled: false }, ...extra });
+// 'YYYY-MM-DD' → 'YY.MM' (긴 기간) / 'MM.DD' (짧은 기간)
+const axisDate = long => v => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v) ? (long ? v.slice(2, 7).replace('-', '.') : v.slice(5).replace('-', '.')) : v);
 
-// ─── 트리맵 (코스피/코스닥 시총) ──────────────────────────────────────────────
-function TreemapChart({ market, period, height, themeKey, onSource }) {
-  const [series, setSeries] = useState(null);
-  useEffect(() => {
-    let alive = true;
-    setSeries(null);
-    fetchJSON(`/api/treemap?market=${market}&period=${period}`)
-      .then(d => { if (!alive) return; if (d.source === 'live' && d.series.length) { setSeries(d.series); onSource && onSource('live'); } else throw 0; })
-      .catch(() => { if (!alive) return; setSeries(buildSampleTreemap(market)); onSource && onSource('sample'); });
-    return () => { alive = false; };
-  }, [market, period]);
-  const t = apexTheme();
-  return series == null
-    ? <ChartLoading height={height} />
-    : <ApexBase height={height} deps={[series, themeKey]} build={() => ({
-        series,
-        legend: { show: false },
-        chart: { type: 'treemap', height: '100%', toolbar: { show: false }, background: 'transparent', fontFamily: 'inherit' },
-        theme: { mode: t.mode },
-        plotOptions: { treemap: { enableShades: false, distributed: false } },
-        stroke: { show: true, width: 2, colors: [t.card] },
-        dataLabels: {
-          enabled: true, style: { fontSize: '12px', fontWeight: 700, colors: ['#fff'] },
-          formatter: (text, op) => {
-            const v = op.w.config.series[op.seriesIndex].data[op.dataPointIndex].value;
-            return [text, `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`];
-          },
-        },
-        tooltip: { theme: t.mode, y: { formatter: (val, o) => {
-          const it = o.w.config.series[o.seriesIndex].data[o.dataPointIndex];
-          return `시총 ${it.y.toFixed(1)}조 · ${it.value >= 0 ? '+' : ''}${it.value.toFixed(2)}%`;
-        } } },
-      })} />;
-}
+// ─── 트리맵 (코스피/코스닥 시총 상위 50) ──────────────────────────────────────
+function TreemapChart({ market, weekly, height, themeKey, colors, onSelect }) {
+  const sample = useLive((s, i) => i.sample);
+  const live = useLive(s => s.treemap[market]);
+  const tick = useTick(60);
+  const week = useResource(weekly && !sample ? `/api/treemap?market=${market}&period=weekly` : null, tick);
 
-// ─── 글로벌 지수 1년 정규화 비교 ──────────────────────────────────────────────
-function MultiLineChart({ range, height, themeKey, onSource }) {
-  const [d, setD] = useState(null);
-  useEffect(() => {
-    let alive = true; setD(null);
-    fetchJSON(`/api/global?range=${range}`)
-      .then(r => { if (!alive) return; if (r.source === 'live' && r.series.length) { setD(r); onSource && onSource('live'); } else throw 0; })
-      .catch(() => { if (!alive) return; setD(buildSampleGlobal()); onSource && onSource('sample'); });
-    return () => { alive = false; };
-  }, [range]);
-  const t = apexTheme();
-  const PALETTE = ['#E5484D', '#3B6EF5', '#F5A623', '#2A9D6E', '#7A5AE0', '#E8772E', '#0EA5E9', '#EC4899', '#84CC16', '#64748B'];
-  return d == null ? <ChartLoading height={height} /> : <ApexBase height={height} deps={[d, themeKey]} build={() => ({
-    series: d.series,
-    chart: { type: 'line', height: '100%', toolbar: { show: false }, background: 'transparent', zoom: { enabled: false }, fontFamily: 'inherit' },
-    colors: PALETTE,
-    stroke: { curve: 'smooth', width: 2 },
+  // 업종별로 묶고 등락률 색을 입힌다 (데이터·테마가 바뀔 때만 다시 계산 → 차트도 그때만 갱신)
+  const colored = useMemo(() => {
+    let series;
+    if (sample) series = buildSampleTreemap(market);
+    else if (weekly) series = week.data && week.data.series ? week.data.series : null;
+    else if (live && live.length) {
+      const groups = new Map();
+      for (const s of live) {
+        if (!groups.has(s.sector)) groups.set(s.sector, []);
+        groups.get(s.sector).push({ x: s.name, y: +(s.market_cap / 10000).toFixed(2), value: s.change_percent, code: s.code });
+      }
+      series = [...groups].map(([name, data]) => ({ name, data }))
+        .sort((a, b) => b.data.reduce((t, d) => t + d.y, 0) - a.data.reduce((t, d) => t + d.y, 0));
+    }
+    if (!series) return null;
+    const t = apexTheme(colors);
+    return series.map(g => ({ name: g.name, data: g.data.map(d => ({ ...d, fillColor: heatColor(d.value, t.up, t.down, t.neutral) })) }));
+  }, [sample, weekly, live, week.data, themeKey]);
+
+  if (!colored) return weekly && week.loading ? <ChartLoading height={height} /> : <ChartEmpty height={height} text={weekly ? '주간 등락 계산 중…' : '데이터 없음'} />;
+  const t = apexTheme(colors);
+  return <ApexBase height={height} deps={[colored]} rebuildKey={themeKey} build={() => ({
+    series: colored,
+    legend: { show: false },
+    chart: apexChart({
+      type: 'treemap',
+      events: { dataPointSelection: (e, ctx, cfg) => {
+        const d = colored[cfg.seriesIndex] && colored[cfg.seriesIndex].data[cfg.dataPointIndex];
+        if (d && d.code && onSelect) onSelect(d.code, d.x);
+      } },
+    }),
     theme: { mode: t.mode },
-    legend: { position: 'top', horizontalAlign: 'left', labels: { colors: t.text3 }, fontSize: '12px' },
-    dataLabels: { enabled: false },
-    xaxis: { categories: d.dates, type: 'category', tickAmount: 8, labels: { style: { colors: t.text3 }, rotate: 0, formatter: v => (v || '').slice(2) } },
-    yaxis: { labels: { formatter: v => v.toFixed(0) + '%', style: { colors: t.text3 } } },
-    grid: { borderColor: t.line, strokeDashArray: 4 },
-    tooltip: { theme: t.mode, y: { formatter: v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%' } },
+    plotOptions: { treemap: { enableShades: false, distributed: false } },
+    stroke: { show: true, width: 2, colors: [t.card] },
+    dataLabels: {
+      enabled: true, style: { fontSize: '12px', fontWeight: 700, colors: ['#fff'] },
+      formatter: (text, op) => {
+        const d = op.w.config.series[op.seriesIndex].data[op.dataPointIndex];
+        return d.value == null ? text : [text, `${d.value >= 0 ? '+' : ''}${d.value.toFixed(2)}%`];
+      },
+    },
+    tooltip: { theme: t.mode, y: { formatter: (val, o) => {
+      const it = o.w.config.series[o.seriesIndex].data[o.dataPointIndex];
+      return `시총 ${it.y.toFixed(1)}조 · ${it.value >= 0 ? '+' : ''}${(it.value || 0).toFixed(2)}% · ${o.w.config.series[o.seriesIndex].name}`;
+    } } },
   })} />;
 }
 
+// ─── 글로벌 지수 정규화 비교 ──────────────────────────────────────────────────
+function MultiLineChart({ range, height, themeKey, colors }) {
+  const sample = useLive((s, i) => i.sample);
+  const version = useLive(s => (s.series ? s.series.version : 0));
+  const tick = useTick(120);
+  const res = useResource(sample ? null : `/api/global?range=${range}`, `${version}:${tick}`);
+  const sampleData = useMemo(() => (sample ? buildSampleGlobal() : null), [sample]);
+  const d = sample ? sampleData : res.data && res.data.source === 'live' ? res.data : null;
+  if (!d) return res.loading ? <ChartLoading height={height} /> : <ChartEmpty height={height} />;
+  const t = apexTheme(colors);
+  const PALETTE = ['#E5484D', '#3B6EF5', '#F5A623', '#2A9D6E', '#7A5AE0', '#E8772E', '#0EA5E9', '#EC4899', '#84CC16', '#64748B'];
+  const long = range === '1y' || range === '5y';
+  return <ApexBase height={height} deps={[d]} rebuildKey={themeKey} build={() => ({
+    series: d.series.map(s => ({ name: s.name, data: s.data })),
+    chart: apexChart({ type: 'line', zoom: { enabled: false } }),
+    colors: PALETTE,
+    stroke: { curve: 'straight', width: 2 },
+    theme: { mode: t.mode },
+    legend: { position: 'top', horizontalAlign: 'left', labels: { colors: t.text3 }, fontSize: '12px' },
+    dataLabels: { enabled: false },
+    xaxis: { categories: d.dates, type: 'category', tickAmount: 8, labels: { style: { colors: t.text3 }, rotate: 0, formatter: axisDate(long) } },
+    yaxis: { labels: { formatter: v => (v == null ? '' : v.toFixed(0) + '%'), style: { colors: t.text3 } } },
+    grid: { borderColor: t.line, strokeDashArray: 4 },
+    tooltip: { theme: t.mode, y: { formatter: v => (v == null ? '–' : (v >= 0 ? '+' : '') + v.toFixed(1) + '%') } },
+  })} />;
+}
+
+// 일별 수급 리소스 (누적 라인 · 이중축 공용)
+const FLOW_DAYS = { '1d': 5, '1w': 5, '1m': 21, '1y': 250, '5y': 600 };
+function useDailyFlows(periodKey) {
+  const sample = useLive((s, i) => i.sample);
+  const version = useLive(s => (s.series ? s.series.version : 0));
+  const flowsDate = useLive(s => (s.boards.KOSPI && s.boards.KOSPI.flows ? `${s.boards.KOSPI.flows.date}:${s.boards.KOSPI.flows.foreign}` : ''));
+  const res = useResource(sample ? null : `/api/flows?market=KOSPI&days=${FLOW_DAYS[periodKey] || 30}`, `${version}:${flowsDate}`);
+  const sampleData = useMemo(() => (sample ? buildSampleInvestors() : null), [sample]);
+  if (sample) return { data: sampleData, loading: false };
+  return { data: res.data && res.data.source === 'live' ? res.data : null, loading: res.loading };
+}
+
 // ─── 투자자별 누적 순매수 ─────────────────────────────────────────────────────
-function InvestorsChart({ height, themeKey, onSource }) {
-  const [d, setD] = useState(null);
-  useEffect(() => {
-    let alive = true; setD(null);
-    fetchJSON('/api/investors')
-      .then(r => { if (!alive) return; if (r.source === 'live') { setD(r); onSource && onSource('live'); } else throw 0; })
-      .catch(() => { if (!alive) return; setD(buildSampleInvestors()); onSource && onSource('sample'); });
-    return () => { alive = false; };
-  }, []);
-  const t = apexTheme();
-  return d == null ? <ChartLoading height={height} /> : <ApexBase height={height} deps={[d, themeKey]} build={() => ({
+function InvestorsChart({ periodKey, height, themeKey, colors }) {
+  const { data: d, loading } = useDailyFlows(periodKey);
+  if (!d) return loading ? <ChartLoading height={height} /> : <ChartEmpty height={height} />;
+  const t = apexTheme(colors);
+  return <ApexBase height={height} deps={[d]} rebuildKey={themeKey} build={() => ({
     series: [
       { name: '개인', data: d.individual }, { name: '외국인', data: d.foreigner },
       { name: '기관', data: d.institution }, { name: '연기금', data: d.pension },
     ],
-    chart: { type: 'line', height: '100%', toolbar: { show: false }, background: 'transparent', fontFamily: 'inherit' },
+    chart: apexChart({ type: 'line' }),
     colors: ['#2A9D6E', '#E5484D', '#3B6EF5', '#7A5AE0'],
     stroke: { curve: 'smooth', width: 2.5 },
     theme: { mode: t.mode },
     legend: { position: 'top', horizontalAlign: 'left', labels: { colors: t.text3 } },
     dataLabels: { enabled: false },
-    xaxis: { categories: d.dates, tickAmount: 8, labels: { style: { colors: t.text3 } } },
+    xaxis: { categories: d.dates, tickAmount: 8, labels: { style: { colors: t.text3 }, rotate: 0, formatter: axisDate(d.dates.length > 120) } },
     yaxis: { labels: { formatter: v => v.toFixed(1) + '조', style: { colors: t.text3 } } },
     grid: { borderColor: t.line, strokeDashArray: 4 },
     tooltip: { theme: t.mode, y: { formatter: v => v.toFixed(2) + '조원' } },
@@ -317,31 +401,25 @@ function InvestorsChart({ height, themeKey, onSource }) {
 }
 
 // ─── 외국인 누적 순매수 vs KOSPI (이중축) ─────────────────────────────────────
-function DualChart({ height, themeKey, onSource }) {
-  const [d, setD] = useState(null);
-  useEffect(() => {
-    let alive = true; setD(null);
-    fetchJSON('/api/investors')
-      .then(r => { if (!alive) return; if (r.source === 'live' && r.kospi.some(x => x != null)) { setD(r); onSource && onSource('live'); } else throw 0; })
-      .catch(() => { if (!alive) return; setD(buildSampleInvestors()); onSource && onSource('sample'); });
-    return () => { alive = false; };
-  }, []);
-  const t = apexTheme();
-  return d == null ? <ChartLoading height={height} /> : <ApexBase height={height} deps={[d, themeKey]} build={() => ({
+function DualChart({ periodKey, height, themeKey, colors }) {
+  const { data: d, loading } = useDailyFlows(periodKey);
+  if (!d || !d.kospi || !d.kospi.some(x => x != null)) return loading ? <ChartLoading height={height} /> : <ChartEmpty height={height} />;
+  const t = apexTheme(colors);
+  return <ApexBase height={height} deps={[d]} rebuildKey={themeKey} build={() => ({
     series: [
       { name: '외국인 누적 순매수', type: 'column', data: d.foreignerCum },
       { name: 'KOSPI 지수', type: 'line', data: d.kospi },
     ],
-    chart: { type: 'line', height: '100%', toolbar: { show: false }, background: 'transparent', fontFamily: 'inherit' },
+    chart: apexChart({ type: 'line' }),
     colors: ['rgba(229,72,77,0.55)', '#3B6EF5'],
     stroke: { width: [0, 3], curve: 'smooth' },
     theme: { mode: t.mode },
     legend: { position: 'top', horizontalAlign: 'left', labels: { colors: t.text3 } },
     dataLabels: { enabled: false },
-    xaxis: { categories: d.dates, tickAmount: 8, labels: { style: { colors: t.text3 } } },
+    xaxis: { categories: d.dates, tickAmount: 8, labels: { style: { colors: t.text3 }, rotate: 0, formatter: axisDate(d.dates.length > 120) } },
     yaxis: [
       { title: { text: '누적 순매수(조)', style: { color: '#E5484D' } }, labels: { formatter: v => v.toFixed(1), style: { colors: t.text3 } } },
-      { opposite: true, title: { text: 'KOSPI', style: { color: '#3B6EF5' } }, labels: { formatter: v => v.toFixed(0), style: { colors: t.text3 } } },
+      { opposite: true, title: { text: 'KOSPI', style: { color: '#3B6EF5' } }, labels: { formatter: v => (v == null ? '' : v.toFixed(0)), style: { colors: t.text3 } } },
     ],
     grid: { borderColor: t.line, strokeDashArray: 4 },
     tooltip: { theme: t.mode },
@@ -349,88 +427,35 @@ function DualChart({ height, themeKey, onSource }) {
 }
 
 // ─── 투자자 수급 종합 보드 (예시 "외인, N주 연속 매도 중" 재현) ───────────────
-// 좌: 4개 누적 순매수 라인 / 우: 외국인 누적 vs KOSPI 이중축 + 자동 헤드라인
-// 데이터: ① /api/investors/weekly (주간 집계 라이브, 최근 2년)
-//        ② /api/investors (일별 라이브, 최근 1개월) ③ 합성 샘플
-function foreignSellStreak(cumForeign, weekly) {
-  let neg = 0;
-  for (let i = cumForeign.length - 1; i >= 1; i--) {
-    if (cumForeign[i] - cumForeign[i - 1] < 0) neg++; else break;
-  }
-  return weekly ? neg : Math.max(0, Math.round(neg / 5)); // 일별이면 주 환산
-}
-// 소스별 응답 → 보드 공통 형태 {freq, dates, cum:{4주체}, net?, kospi, streak:{weeks,direction}}
-function weeklyAsBoard(r) {
-  return { freq: 'weekly', dates: r.dates, cum: r.cum, net: r.net, kospi: r.kospi, streak: r.streak };
-}
-function dailyAsBoard(r) {
-  const weeks = foreignSellStreak(r.foreigner, false);
-  const n = r.foreigner.length;
-  const lastDiff = r.foreigner[n - 1] - (r.foreigner[n - 2] != null ? r.foreigner[n - 2] : r.foreigner[n - 1]);
-  return {
-    freq: 'daily', dates: r.dates,
-    cum: { individual: r.individual, foreigner: r.foreigner, institution: r.institution, pension: r.pension },
-    kospi: r.kospi, streak: { weeks, direction: lastDiff < 0 ? 'sell' : 'buy' },
-  };
-}
-function sampleAsBoard() {
-  const s = buildSampleFlowBoard();
-  return {
-    freq: 'weekly', dates: s.dates,
-    cum: { individual: s.individual, foreigner: s.foreigner, institution: s.institution, pension: s.pension },
-    kospi: s.kospi, streak: { weeks: foreignSellStreak(s.foreigner, true), direction: 'sell' },
-  };
-}
-// 축 라벨: 'YYYY-MM-DD'→'YY.MM' · 'YY.MM.DD'→'MM.DD' · 그 외 원본
-function fbAxisLabel(s) {
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(2, 7).replace('-', '.');
-  if (/^\d{2}\.\d{2}\.\d{2}$/.test(s)) return s.slice(3);
-  return s;
-}
-function FlowBoardChart({ height, themeKey, onSource }) {
-  const [d, setD] = useState(null);
-  useEffect(() => {
-    let alive = true; setD(null);
-    (async () => {
-      try {
-        const w = await fetchJSON('/api/investors/weekly?weeks=104');
-        if (w && w.source === 'live' && w.cum && w.cum.foreigner && w.cum.foreigner.length > 8) {
-          if (alive) { setD(weeklyAsBoard(w)); onSource && onSource('live'); }
-          return;
-        }
-        throw 0;
-      } catch (_) { if (!alive) return; }
-      try {
-        const r = await fetchJSON('/api/investors');
-        if (r && r.source === 'live' && r.foreigner && r.foreigner.length > 2) {
-          if (alive) { setD(dailyAsBoard(r)); onSource && onSource('live'); }
-          return;
-        }
-        throw 0;
-      } catch (_) { if (!alive) return; }
-      setD(sampleAsBoard()); onSource && onSource('sample');
-    })();
-    return () => { alive = false; };
-  }, []);
-  const t = apexTheme();
-  if (d == null) return <ChartLoading height={height} />;
+// 좌: 4개 누적 순매수 라인 / 우: 외국인 누적 vs 지수 이중축 + 자동 헤드라인 (코스피·코스닥 전환)
+function FlowBoardChart({ height, themeKey, colors }) {
+  const [market, setMarket] = useState('KOSPI');
+  const sample = useLive((s, i) => i.sample);
+  const version = useLive(s => (s.series ? s.series.version : 0));
+  const tick = useTick(300);   // 장중 잠정 수급이 이번 주 막대에 반영되도록 5분마다
+  const res = useResource(sample ? null : `/api/flows/weekly?market=${market}&weeks=104`, `${version}:${tick}`);
+  const sampleData = useMemo(() => (sample ? buildSampleFlowBoard() : null), [sample]);
+  const d = sample ? sampleData : res.data && res.data.source === 'live' ? res.data : null;
+  if (!d) return res.loading ? <ChartLoading height={height} /> : <ChartEmpty height={height} />;
+  const t = apexTheme(colors);
   const { weeks, direction } = d.streak;
   const selling = direction === 'sell';
   const lastNet = d.net ? d.net.foreigner[d.net.foreigner.length - 1] : null;
   const chH = Math.max(220, height - 16);
+  const indexName = market === 'KOSDAQ' ? 'KOSDAQ' : 'KOSPI';
 
   const leftBuild = () => ({
     series: [
       { name: '개인', data: d.cum.individual }, { name: '외국인', data: d.cum.foreigner },
       { name: '기관', data: d.cum.institution }, { name: '연기금', data: d.cum.pension },
     ],
-    chart: { type: 'line', height: '100%', toolbar: { show: false }, background: 'transparent', fontFamily: 'inherit', animations: { enabled: false } },
+    chart: apexChart({ type: 'line' }),
     colors: ['#2A9D6E', '#E5484D', '#3B6EF5', '#8B95A1'],
     stroke: { curve: 'straight', width: 2 },
     theme: { mode: t.mode },
     legend: { position: 'top', horizontalAlign: 'left', labels: { colors: t.text3 }, fontSize: '11px', markers: { width: 8, height: 8 } },
     dataLabels: { enabled: false },
-    xaxis: { categories: d.dates, tickAmount: 8, labels: { style: { colors: t.text3 }, rotate: 0, formatter: fbAxisLabel } },
+    xaxis: { categories: d.dates, tickAmount: 8, labels: { style: { colors: t.text3 }, rotate: 0, formatter: axisDate(true) } },
     yaxis: { labels: { formatter: v => v.toFixed(0) + '조', style: { colors: t.text3 } } },
     grid: { borderColor: t.line, strokeDashArray: 4 },
     tooltip: { theme: t.mode, y: { formatter: v => (v >= 0 ? '+' : '') + v.toFixed(2) + '조원' } },
@@ -438,19 +463,19 @@ function FlowBoardChart({ height, themeKey, onSource }) {
   const rightBuild = () => ({
     series: [
       { name: '외국인 누적 순매수', type: 'line', data: d.cum.foreigner },
-      { name: 'KOSPI', type: 'line', data: d.kospi },
+      { name: indexName, type: 'line', data: d.kospi },
     ],
-    chart: { type: 'line', height: '100%', toolbar: { show: false }, background: 'transparent', fontFamily: 'inherit', animations: { enabled: false } },
+    chart: apexChart({ type: 'line' }),
     colors: ['#E5484D', '#3B6EF5'],
     stroke: { width: [2, 2], curve: 'straight', dashArray: [5, 0] },
     markers: { size: [2.5, 0], strokeWidth: 0, hover: { sizeOffset: 1 } },
     theme: { mode: t.mode },
     legend: { position: 'top', horizontalAlign: 'left', labels: { colors: t.text3 }, fontSize: '11px' },
     dataLabels: { enabled: false },
-    xaxis: { categories: d.dates, tickAmount: 8, labels: { style: { colors: t.text3 }, rotate: 0, formatter: fbAxisLabel } },
+    xaxis: { categories: d.dates, tickAmount: 8, labels: { style: { colors: t.text3 }, rotate: 0, formatter: axisDate(true) } },
     yaxis: [
       { seriesName: '외국인 누적 순매수', labels: { formatter: v => v.toFixed(1) + '조', style: { colors: '#E5484D' } }, title: { text: '외국인 누적(조)', style: { color: '#E5484D' } } },
-      { opposite: true, seriesName: 'KOSPI', labels: { formatter: v => v.toFixed(0), style: { colors: '#3B6EF5' } }, title: { text: 'KOSPI', style: { color: '#3B6EF5' } } },
+      { opposite: true, seriesName: indexName, labels: { formatter: v => (v == null ? '' : v.toFixed(0)), style: { colors: '#3B6EF5' } }, title: { text: indexName, style: { color: '#3B6EF5' } } },
     ],
     grid: { borderColor: t.line, strokeDashArray: 4 },
     tooltip: { theme: t.mode },
@@ -465,36 +490,75 @@ function FlowBoardChart({ height, themeKey, onSource }) {
             : <>외인, <span className="fb-buy">{weeks}주 연속</span> 순매수 중</>
         ) : <>외국인 수급 혼조</>}
         {lastNet != null && (
-          <span className="fb-meta">이번 주 {lastNet >= 0 ? '+' : ''}{lastNet.toFixed(2)}조{d.freq === 'weekly' ? '' : ' (일별 환산)'}</span>
+          <span className="fb-meta">이번 주 {lastNet >= 0 ? '+' : ''}{lastNet.toFixed(2)}조{d.provisional ? ' (장중 잠정 포함)' : ''}</span>
+        )}
+        {!sample && (
+          <span className="mini-seg">
+            {['KOSPI', 'KOSDAQ'].map(m => (
+              <button key={m} className={market === m ? 'active' : ''} onClick={() => setMarket(m)}>{m === 'KOSPI' ? '코스피' : '코스닥'}</button>
+            ))}
+          </span>
         )}
       </div>
       <div className="flowboard-grid">
         <div className="flowboard-cell">
-          <div className="flowboard-sub">투자자별 누적 순매수{d.freq === 'weekly' ? ' (주간 · 최근 2년)' : ' (일별 · 최근 1개월)'}</div>
-          <ApexBase height={chH} deps={[d, themeKey]} build={leftBuild} />
+          <div className="flowboard-sub">투자자별 누적 순매수 (주간 · 최근 2년)</div>
+          <ApexBase height={chH} deps={[d]} rebuildKey={themeKey} build={leftBuild} />
         </div>
         <div className="flowboard-cell">
-          <div className="flowboard-sub">외국인 누적 순매수 vs KOSPI</div>
-          <ApexBase height={chH} deps={[d, themeKey]} build={rightBuild} />
+          <div className="flowboard-sub">외국인 누적 순매수 vs {indexName}</div>
+          <ApexBase height={chH} deps={[d]} rebuildKey={themeKey} build={rightBuild} />
         </div>
       </div>
     </div>
   );
 }
 
-function ChartLoading({ height }) {
-  return <div className="chart-loading" style={{ height }}>
-    <span className="spinner"></span> 데이터 불러오는 중…
-  </div>;
+// ─── 캔들 차트 (종목 상세) ────────────────────────────────────────────────────
+function CandleChart({ rows, height, themeKey, colors }) {
+  if (!rows || rows.length < 2) return <ChartEmpty height={height} />;
+  const t = apexTheme(colors);
+  const data = rows.map(r => ({ x: new Date(`${r.date}T00:00:00`).getTime(), y: [r.open, r.high, r.low, r.close] }));
+  return <ApexBase height={height} deps={[rows]} rebuildKey={themeKey} build={() => ({
+    series: [{ name: '시세', data }],
+    chart: apexChart({ type: 'candlestick' }),
+    theme: { mode: t.mode },
+    plotOptions: { candlestick: { colors: { upward: t.up, downward: t.down }, wick: { useFillColor: true } } },
+    xaxis: { type: 'datetime', labels: { style: { colors: t.text3 }, datetimeUTC: false, format: 'MM.dd' } },
+    yaxis: { tooltip: { enabled: true }, labels: { formatter: v => fmtNum(v, 0), style: { colors: t.text3 } } },
+    grid: { borderColor: t.line, strokeDashArray: 4 },
+    tooltip: { theme: t.mode, x: { format: 'yyyy.MM.dd' } },
+  })} />;
 }
 
-// ── 합성 폴백 빌더 (서버 미가동/실패 시 디자인 유지용) ─────────────────────────
+// ─── 국채 수익률 곡선 (한국 vs 미국) ──────────────────────────────────────────
+// x 는 만기 순번(0=1년 … 5=30년) — 없는 만기는 건너뛰고 선을 잇는다
+function YieldCurveChart({ tenors, kr, us, height, themeKey, colors }) {
+  const t = apexTheme(colors);
+  const points = values => values.map((y, x) => (y == null ? null : { x, y })).filter(Boolean);
+  return <ApexBase height={height} deps={[kr, us]} rebuildKey={themeKey} build={() => ({
+    series: [{ name: '한국 국고채', data: points(kr) }, { name: '미국 국채', data: points(us) }],
+    chart: apexChart({ type: 'line' }),
+    colors: ['#E5484D', '#3B6EF5'],
+    stroke: { curve: 'straight', width: 2.5 },
+    markers: { size: 4, strokeWidth: 0 },
+    theme: { mode: t.mode },
+    legend: { position: 'top', horizontalAlign: 'left', labels: { colors: t.text3 }, fontSize: '11px' },
+    dataLabels: { enabled: false },
+    xaxis: { type: 'numeric', min: 0, max: tenors.length - 1, tickAmount: tenors.length - 1,
+      labels: { style: { colors: t.text3 }, formatter: v => tenors[Math.round(v)] || '' }, tooltip: { enabled: false } },
+    yaxis: { labels: { formatter: v => (v == null ? '' : v.toFixed(2) + '%'), style: { colors: t.text3 } } },
+    grid: { borderColor: t.line, strokeDashArray: 4 },
+    tooltip: { theme: t.mode, x: { formatter: v => `만기 ${tenors[Math.round(v)]}` }, y: { formatter: v => (v == null ? '–' : v.toFixed(3) + '%') } },
+  })} />;
+}
+
+// ── 합성 폴백 빌더 (서버에 연결할 수 없을 때 디자인 유지용) ─────────────────────
 function buildSampleTreemap(market) {
-  const seeds = market === 'kosdaq'
+  const seeds = market === 'KOSDAQ'
     ? [['에코프로비엠', 11, 2.1], ['알테오젠', 7, -1.4], ['HLB', 5, 3.2], ['에코프로', 6, 0.8], ['엔켐', 3, -2.1], ['휴젤', 4, 1.1], ['클래시스', 3, -0.5], ['JYP', 2, 0.9], ['크래프톤', 8, -1.8], ['에스엠', 2, 0.4]]
     : [['삼성전자', 480, 1.2], ['SK하이닉스', 160, 2.4], ['LG에너지솔루션', 95, -1.1], ['삼성바이오', 70, 0.6], ['현대차', 55, -0.8], ['기아', 42, 0.3], ['NAVER', 38, -1.6], ['카카오', 30, 1.9], ['KB금융', 35, 0.5], ['셀트리온', 33, -2.2]];
-  return [{ name: market === 'kosdaq' ? '코스닥 상위' : '코스피 상위',
-    data: seeds.map(([x, y, value]) => ({ x, y, value, fillColor: value > 0 ? '#E5484D' : value < 0 ? '#3B6EF5' : '#64748B' })) }];
+  return [{ name: market === 'KOSDAQ' ? '코스닥 상위' : '코스피 상위', data: seeds.map(([x, y, value]) => ({ x, y, value })) }];
 }
 function buildSampleGlobal() {
   const names = [['코스피', 11, 26], ['니케이', 12, 17], ['코스닥', 13, 12], ['S&P500', 14, 22], ['나스닥', 15, 28], ['항셍', 16, -4], ['독일 DAX', 17, 19], ['다우', 18, 14]];
@@ -505,8 +569,8 @@ function buildSampleGlobal() {
 }
 function buildSampleInvestors() {
   const n = 30;
-  const dates = DATES_5Y.slice(-n).map(d => `${String(d.getFullYear()).slice(2)}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`);
-  const acc = (seed, drift, v) => { const r = mulberry32(seed); let s = 0; return Array.from({ length: n }, (_, i) => +(s += drift + (r() - 0.5) * v).toFixed(2)); };
+  const dates = DATES_5Y.slice(-n).map(d => d.toISOString().slice(0, 10));
+  const acc = (seed, drift, v) => { const r = mulberry32(seed); let s = 0; return Array.from({ length: n }, () => +(s += drift + (r() - 0.5) * v).toFixed(2)); };
   const foreigner = acc(51, -1.6, 1.2);
   const kbase = genSeries(99, 3050, 3052, 12, n).map(v => +v.toFixed(2));
   return {
@@ -514,37 +578,34 @@ function buildSampleInvestors() {
     foreignerCum: foreigner, kospi: kbase,
   };
 }
-
 // 2년 주간 수급 보드 샘플 (예시 형태: 외국인 후반 연속 순매도, 기관·개인 누적, KOSPI 상승 발산)
 function buildSampleFlowBoard() {
-  const n = 104;                       // 2년 주간
-  const lateK = 19;                    // 최근 19주 외국인 순매도 (예시: "19주 연속")
+  const n = 104, lateK = 19;
   const r = mulberry32(719);
   const dates = [];
   const base = new Date();
   for (let i = n - 1; i >= 0; i--) {
     const dt = new Date(base); dt.setDate(dt.getDate() - i * 7);
-    dates.push(`${String(dt.getFullYear()).slice(2)}-${String(dt.getMonth() + 1).padStart(2, '0')}`);
+    dates.push(dt.toISOString().slice(0, 10));
   }
   const individual = [], foreigner = [], institution = [], pension = [], kospi = [];
   let ai = 0, af = 0, an = 0, ap = 0;
   for (let i = 0; i < n; i++) {
     const late = i >= n - lateK;
-    const fNet = late ? -(0.5 + r() * 0.6) : (r() - 0.42) * 0.7;   // 후반 강한 순매도
-    const iNet = late ? (0.25 + r() * 0.4) : (r() - 0.45) * 0.5;
-    const nNet = (r() - 0.5) * 0.25 + (late ? 0.12 : 0.04);
-    const pNet = (r() - 0.5) * 0.12 + 0.03;
-    af += fNet; ai += iNet; an += nNet; ap += pNet;
+    af += late ? -(0.5 + r() * 0.6) : (r() - 0.42) * 0.7;
+    ai += late ? (0.25 + r() * 0.4) : (r() - 0.45) * 0.5;
+    an += (r() - 0.5) * 0.25 + (late ? 0.12 : 0.04);
+    ap += (r() - 0.5) * 0.12 + 0.03;
     foreigner.push(+af.toFixed(2)); institution.push(+ai.toFixed(2));
-    pension.push(+an.toFixed(2)); individual.push(+(-af * 0.9 + ap + (r() - 0.5)).toFixed(2)); // 개인은 외국인 매도 흡수
-    // KOSPI: 전반 약세→후반 강세 (외국인 매도와 발산)
+    pension.push(+an.toFixed(2)); individual.push(+(-af * 0.9 + ap + (r() - 0.5)).toFixed(2));
     const prog = i / (n - 1);
     kospi.push(+(2400 + prog * prog * 5200 + Math.sin(i / 9) * 180 + (r() - 0.5) * 120).toFixed(2));
   }
-  return { dates, individual, foreigner, institution, pension, foreignerCum: foreigner, kospi, weekly: true };
+  return { dates, cum: { individual, foreigner, institution, pension }, kospi, streak: { weeks: lateK, direction: 'sell' } };
 }
 
 Object.assign(window, {
-  LineChart, BarChart, Gauge, SectorList, useWidth,
-  TreemapChart, MultiLineChart, InvestorsChart, DualChart, FlowBoardChart, ChartLoading,
+  LineChart, BarChart, Gauge, SectorList, useWidth, cssVar, resolveColor, heatColor, apexTheme,
+  TreemapChart, MultiLineChart, InvestorsChart, DualChart, FlowBoardChart, CandleChart, YieldCurveChart,
+  ChartLoading, ChartEmpty, ApexBase,
 });

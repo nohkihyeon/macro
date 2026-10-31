@@ -1,24 +1,49 @@
 # 📊 시그널보드 (Signalboard)
 
-> 실시간 국내·글로벌 증시 지표 대시보드 — 코스피·코스닥, 금리, 환율, 원자재, 수급, 시총 트리맵을 한 화면에서.
+> 실시간 국내·글로벌 증시 지표 대시보드 — 코스피·코스닥, 글로벌 지수, 금리·환율, 원자재, 수급, MacroScore, 달러 매수 타이밍을 한 화면에서.
 
 🔗 **라이브 데모:** https://signalboard-smx1.onrender.com
 > ⏱ 무료 호스팅이라 15분 미사용 후 첫 접속은 깨어나는 데 30~50초 걸립니다.
 
-Node.js(Express) 백엔드가 **Yahoo Finance**와 **네이버 금융**에서 데이터를 수집해 JSON API로 제공하고, 정적 프론트엔드가 위젯 그리드로 시각화합니다. 라이브 데이터는 **LIVE** 배지, 합성 샘플은 **샘플** 배지로 구분됩니다.
+Node.js(Express) 서버의 **수집기**가 네이버 증권 **배치 JSON API**를 장 상태에 맞춘 주기로 호출해 메모리 스냅샷을 유지하고, 브라우저는 **SSE(Server-Sent Events)** 로 바뀐 데이터만 실시간으로 받습니다. 정적 프론트엔드(빌드 없음)는 위젯 그리드로 시각화합니다.
 
 ---
 
 ## ✨ 주요 기능
 
-- **시장** — 코스피 / 코스닥 / 코스피200, 업종별 등락, 시가총액 트리맵(코스피·코스닥)
-- **금리** — 기준금리·콜금리·국고채(3·10년)·CD 91일·회사채 3년
-- **환율** — 원/달러, 원/100엔, 원/유로
-- **원자재** — WTI 원유, 금, 구리
-- **수급** — 투자자별(개인·외국인·기관·연기금) 누적 순매수, 외국인 vs 코스피, 주간 수급 보드
-- **심리** — VKOSPI(실현변동성), VIX, 자체 합성 공포·탐욕 지수
-- **글로벌** — 주요 지수 10종 1년 정규화 비교
-- 위젯 드래그 재배치 · 라이트/다크 테마 · 자동 갱신
+| 탭 | 내용 |
+|----|------|
+| **홈** | MacroScore · 코스피/코스닥/원달러 · 시장 요약 · 위험 신호 · 공포탐욕 · 트리맵 · 업종 · 수급 보드 |
+| **시장** | 코스피·코스닥·**코스피200 선물(실제 선물)** · 지수 보드(52주 위치·이평·실현변동성·수급) · 전 종목 시장 폭·52주 신고/신저가 · 업종 79개 · 거래대금 상위 · 테마 · 프로그램 매매 · 시총 트리맵 · VKOSPI |
+| **글로벌** | 10개 지수 정규화 비교 · S&P500·나스닥·SOX·나스닥100·다우·니케이·항셍·상해·DAX·SENSEX·VIX |
+| **금리·환율** | 원/달러·달러인덱스·달러/엔·원/엔·원/유로·원/위안 · 한미 기준금리·금리차 · 국고채 1~30년 · 미국채 2~30년 · 장단기 금리차 · 국채 수익률 곡선 |
+| **달러** | DollarScope 이식 — **원/달러 매수 타이밍 종합 판단**(11개 지표 점수) · 3년 평균 밴드 차트 · 지표 체크리스트 · 참고 가격대 · 은행 고시 환율 |
+| **원자재** | WTI·브렌트·천연가스·금·은·구리·BDI |
+| **수급·심리** | 투자자 수급 보드("외인 N주 연속 순매도") · 외국인/기관/개인/연기금 · 신용잔고·예탁금 · 공포탐욕 · VKOSPI · VIX |
+| **매크로** | MacroScore(7팩터) · 위험 신호 8종 · 시장 요약 · KOSPI 상관·베타 · 수익률 곡선 |
+| **관심종목** | 종목 검색 → 실시간 시세 (서버가 모든 접속자의 관심종목을 1회 호출로 묶어 조회) |
+
+공통: 기간 **1일(1분봉)**·1주·1달·1년·5년 · 라인 차트 마지막 점 실시간 반영 · 값 변경 깜빡임 · 종목 클릭 시 캔들 차트 · 가격 알림(토스트 + 브라우저 알림) · CSV 내보내기 · 위젯 드래그 재배치 · 라이트/다크 · 한국식/미국식 등락 색 · 모바일 대응
+
+---
+
+## ⚡ 실시간 데이터 방식
+
+**왜 바꿨나** — 예전 방식은 Yahoo Finance(현재 429 차단)와 네이버 HTML 스크래핑(금리 페이지 410 종료)을 위젯마다 따로 호출해, 상당수 지표가 들어오지 않거나 느렸습니다.
+
+| 데이터 | 호출 | 예전 |
+|--------|------|------|
+| 국내 지수 4종 (코스피·코스닥·코스피200·선물) | polling **1회** | Yahoo 3회 |
+| 해외 지수 11종 | polling **1회** | Yahoo 10회 |
+| 환율·금리·원자재·기준금리 ~50종 | marketIndex/majors **1회** | Yahoo·HTML 수십 회 |
+| 수급(장중 잠정)·프로그램·전 종목 등락수·52주 고저 | integration **1회/시장** | HTML 스크래핑 |
+| 일별 투자자 수급 2.4년 | trend/daily **3회** (200일/회) | HTML 53페이지 |
+| 지수 일봉 5년 | chart **1회** | Yahoo |
+
+- **수집기**: 장중 20초 · 장외(미국장·환율) 60초 · 휴장 5분으로 자동 조절, 접속자가 없으면 수집 중단
+- **캐시**: TTL · single-flight(동시 요청 1번만) · stale-while-revalidate · 실패 시 마지막 정상값 · `cache/*.json` 디스크 영속화(재시작해도 다시 받지 않음)
+- **HTTP**: keep-alive · 지수 백오프 재시도 · 호스트별 서킷 브레이커
+- **전송**: `/api/stream` SSE — 접속 시 전체 스냅샷, 이후 **바뀐 토픽만**(시세는 바뀐 종목만, 분봉은 새 분만) 푸시. SSE 가 막힌 환경은 `/api/snapshot` 폴링(ETag 304)으로 자동 전환, 탭이 숨겨지면 연결 해제
 
 ---
 
@@ -27,39 +52,32 @@ Node.js(Express) 백엔드가 **Yahoo Finance**와 **네이버 금융**에서 �
 ```mermaid
 flowchart TD
     subgraph B["① 브라우저 · 정적 프론트엔드 (빌드 없음)"]
-        UI["index.html · app.jsx · charts.jsx<br/>data.js · widgets.jsx"]
+        UI["app.jsx · widgets.jsx · panels.jsx · dollar.jsx · charts.jsx"]
+        LS["data.js · LiveStore (SSE / 폴링 폴백) · 리소스 캐시"]
     end
-    subgraph S["② Render · Node.js / Express (server.js)"]
-        API["API 라우트<br/>/api/series · /api/quotes · /api/treemap · /api/global<br/>/api/investors · /api/breadth · /api/health"]
-        CA["캐시<br/>인메모리 + cache/investors-daily.json"]
+    subgraph S["② Node.js / Express (server.js)"]
+        API["/api/stream (SSE) · /api/snapshot · /api/history · /api/flows · /api/dollar · …"]
+        COL["collector · 장 상태별 주기 · 토픽별 diff 발행"]
+        CA["cache · TTL/SWR/single-flight · cache/*.json"]
     end
     subgraph P["③ pipeline"]
-        SRC["sources.js · 저수준 페처<br/>axios · cheerio · iconv-lite"]
-        CAT["catalog.js · 지표↔소스 매핑 · 합성 폴백"]
+        SRC["sources/naver.js · http.js (재시도·브레이커)"]
+        AN["instruments · analytics · score · insights · dollar"]
     end
-    Y["Yahoo Finance"]
-    N["네이버 금융<br/>EUC-KR"]
-    T["TradingView<br/>스캐너"]
+    N["네이버 증권 JSON API"]
+    T["TradingView 스캐너 (V-KOSPI 선물)"]
+    Y["Yahoo (히스토리 백업)"]
 
-    UI -->|"fetch /api/* (동일 오리진)"| API
-    API --> CA
-    API --> SRC
-    SRC --> CAT
-    SRC -->|HTTPS| Y
-    SRC -->|스크래핑| N
-    SRC -->|HTTPS| T
+    UI <--> LS
+    LS <-->|"SSE + REST (동일 오리진)"| API
+    API --> COL --> CA
+    COL --> SRC --> N
+    SRC --> T
+    SRC -.-> Y
+    COL --> AN
 ```
 
-> 편집 가능한 원본 다이어그램: **[architecture.drawio](architecture.drawio)** (draw.io / VS Code Draw.io 확장에서 열기)
-
-**왜 백엔드가 필요한가** — 브라우저에서 Yahoo·네이버를 직접 호출하면 CORS에 막힙니다. `server.js`가 데이터를 대신 수집(프록시)·캐싱하므로, GitHub Pages 같은 순수 정적 호스팅만으로는 실데이터가 들어오지 않습니다. 그래서 Node 서버를 띄울 수 있는 Render에 배포합니다.
-
-| 계층 | 역할 |
-|------|------|
-| ① 브라우저 | 정적 파일을 그대로 렌더(빌드 스텝 없음). `/api/*`를 호출해 위젯에 LIVE 데이터 주입, 실패 시 합성 샘플 유지 |
-| ② Express | 정적 서빙 + API 엔드포인트 + 소스별 캐시(금리 1시간, 수급 5분 등) |
-| ③ pipeline | `sources.js`가 외부 소스를 긁고, `catalog.js`가 지표↔소스를 매핑·합성 폴백 |
-| ④ 외부 소스 | Yahoo Finance, 네이버 금융, TradingView 스캐너 |
+> 편집 가능한 원본: **[architecture.drawio](architecture.drawio)**
 
 ---
 
@@ -67,111 +85,78 @@ flowchart TD
 
 | 영역 | 사용 |
 |------|------|
-| 백엔드 | Node.js, Express 5 |
-| 스크래핑 | axios, cheerio, iconv-lite (네이버 EUC-KR 디코딩) |
-| 프론트 | 정적 HTML/JSX + ApexCharts + Pretendard (별도 빌드 스텝 없음 — 정적 파일 그대로 서빙) |
-| 데이터 소스 | Yahoo Finance API, 네이버 금융, TradingView 스캐너 |
+| 백엔드 | Node.js 18+ (내장 fetch), Express 5, compression — 의존성 2개 |
+| 프론트 | 정적 HTML/JSX (React 18 + Babel standalone, 빌드 없음), ApexCharts 5, Pretendard |
+| 데이터 | 네이버 증권 JSON API, TradingView 스캐너, KRX OpenAPI(선택), Yahoo(백업) |
+| 테스트 | node:test (실제 응답 픽스처 기반) |
 | 배포 | Render (Web Service, 무료 플랜) |
 
 ---
 
-## 🚀 로컬에서 실행 (한 줄)
+## 🚀 로컬에서 실행
 
 > **사전 준비:** [Node.js](https://nodejs.org) 18 이상
 
-### 가장 쉬운 방법 — 더블클릭
+| 방법 | |
+|------|---|
+| **macOS** | `start.command` 더블클릭 (Node 확인 → 최초 1회 설치 → 서버 → 브라우저 자동 오픈) |
+| **Windows** | `start.bat` 더블클릭 또는 `start.ps1` |
+| **명령줄** | `npm install` 후 `npm start` → http://localhost:3000 (3000 을 다른 앱이 쓰면 3001, 3002… 로 자동 전환하고 그 주소를 엽니다) |
 
-| 파일 | 설명 |
-|------|------|
-| **[start.bat](start.bat)** | 탐색기에서 더블클릭 → Node 확인 → (최초 1회) `npm install` → 서버 시작 → **브라우저 자동 오픈** |
-| **[start.ps1](start.ps1)** | PowerShell 사용자용 (우클릭 → PowerShell에서 실행) |
-
-### 명령줄
-
-```powershell
-npm install   # 최초 1회
-npm start     # = node server.js → http://localhost:3000 자동 오픈
-```
-
-정상 실행 시:
-
-```
-===============================================
-📊 시그널보드 대시보드 서버 시작!
-👉 접속 주소: http://localhost:3000
-===============================================
-```
-
-종료는 콘솔에서 `Ctrl+C`.
-
-### 데이터 소스 점검 (서버 없이)
-
-```powershell
-npm run check        # 어떤 지표가 라이브로 들어오는지 표로 확인
-npm run check:json   # JSON 출력 (CI/모니터링용)
+```bash
+npm start          # 서버 시작 (브라우저 자동 오픈)
+npm run dev        # 코드 수정 시 자동 재시작 (브라우저 자동 오픈 없음)
+npm run check      # 모든 데이터 소스 점검 (서버 없이)
+npm test           # 테스트
+PORT=3100 npm start   # 포트 고정 (사용 중이면 자동 전환 없이 에러로 종료)
 ```
 
 ---
 
 ## ☁️ 웹에 배포하기 (Render — 무료)
 
-### 1) GitHub에 푸시
+1. GitHub에 푸시
+2. [render.com](https://render.com) → **New +** → **Blueprint** → 이 레포 선택 → 동봉된 [render.yaml](render.yaml) 로 자동 생성 (헬스체크 `/api/health`)
+   - 수동: Web Service · Runtime `Node` · Build `npm install` · Start `node server.js`
+3. `main` 브랜치에 push 할 때마다 자동 재배포
 
-```powershell
-git remote add origin https://github.com/<사용자명>/<레포명>.git
-git push -u origin main
-```
-
-### 2) Render에 연결
-
-**방법 A — Blueprint (권장, 자동):**
-1. [render.com](https://render.com) 가입 후 GitHub 계정 연동
-2. **New +** → **Blueprint** → 이 레포 선택
-3. 동봉된 [render.yaml](render.yaml)을 읽어 웹 서비스가 자동 생성됨 → **Apply**
-
-**방법 B — 수동:**
-1. **New +** → **Web Service** → 이 레포 선택
-2. 설정값:
-   - **Runtime:** `Node`
-   - **Build Command:** `npm install`
-   - **Start Command:** `node server.js`
-   - **Instance Type:** `Free`
-3. **Create Web Service**
-
-### 3) 완료
-
-배포가 끝나면 `https://<서비스명>.onrender.com` 주소로 접속됩니다. 이후 `main` 브랜치에 push할 때마다 **자동 재배포**됩니다.
-
-> ⚠️ **무료 플랜 참고**
-> - 15분간 요청이 없으면 서버가 잠들고(sleep), 다음 첫 접속 시 깨어나는 데 약 30~50초가 걸립니다. (항상 빠르게 쓰려면 유료 플랜 또는 UptimeRobot 같은 핑 서비스로 우회)
-> - 디스크는 휘발성이라 [cache/](cache/) 의 일별 수급 캐시는 재배포 시 초기화됩니다(자동 재수집되므로 문제 없음).
+> ⚠️ 무료 플랜은 15분간 요청이 없으면 잠듭니다. 브라우저 탭을 열어 두면 SSE 연결이 유지돼 깨어 있고, 아무도 안 보면 서버도 수집을 멈춥니다. 디스크는 휘발성이라 `cache/` 는 재배포 시 초기화되며 자동으로 다시 받습니다.
 
 ---
 
 ## ⚙️ 환경 변수
 
+모두 선택이며 기본값이 있습니다. 로컬은 `.env`([.env.example](.env.example) 참고), Render 는 Environment 에 등록합니다.
+
 | 변수 | 기본값 | 설명 |
 |------|--------|------|
-| `PORT` | `3000` | 서버 포트 (Render가 자동 주입) |
-| `NO_OPEN` | — | `1`이면 브라우저 자동 오픈 비활성화 (서버/CI용) |
-| `RENDER` | — | Render가 자동 주입 — 감지 시 브라우저 자동 오픈 생략 |
+| `PORT` | `3000` | 서버 포트 |
+| `NO_OPEN` | — | `1` 이면 브라우저 자동 오픈 안 함 |
+| `REFRESH_KR_OPEN` / `REFRESH_ACTIVE` / `REFRESH_CLOSED` | `20` / `60` / `300` | 장중 / 장외 활성 / 휴장 수집 주기(초) |
+| `REFRESH_HISTORY` | `3600` | 일별 히스토리·수급·신용 갱신 주기(초) |
+| `IDLE_AFTER` | `300` | 마지막 접속 후 이 시간(초)이 지나면 수집 중단 |
+| `CACHE_DIR` | `./cache` | 디스크 캐시 위치 |
+| `USDKRW_WARNING` · `VIX_WARNING` · `VIX_DANGER` | `1400` · `25` · `35` | 위험 신호 임계값 |
+| `KRX_API_KEY` | — | 설정 시 VKOSPI 지수(일별)를 KRX OpenAPI 로 표시 |
 
 ---
 
 ## 🔌 API 엔드포인트
 
-| 메서드 | 경로 | 설명 |
-|--------|------|------|
-| `GET` | `/api/series/:id?range=1w\|1m\|1y\|5y` | 단일 지표 시계열 |
-| `GET` | `/api/quotes?ids=kospi,kosdaq,sp500,nasdaq` | KPI 배치 현재가/등락률 |
-| `GET` | `/api/treemap?market=kospi&period=daily\|weekly` | 시총 상위 → 업종 트리맵 |
-| `GET` | `/api/global?range=1y` | 글로벌 지수 정규화 비교 |
-| `GET` | `/api/investors` | 투자자별 누적 순매수 + 외국인 vs 코스피 |
-| `GET` | `/api/investors/weekly?weeks=104` | 주간 수급 집계 + 외국인 연속 매매 주 수 |
-| `GET` | `/api/breadth?market=kospi` | 시장 폭(상승/하락/보합 종목 수) |
-| `GET` | `/api/health` | 외부 소스(Yahoo·네이버) 생존 상태 |
+| 경로 | 설명 |
+|------|------|
+| `GET /api/stream?watch=005930,…` | **SSE** — `snapshot` 후 `quotes`·`stocks`(바뀐 종목만)·`intraday`(새 분봉만)·`boards`·`treemap`·`movers`·`sectors`·`themes`·`insights`·`dollar`·`series`·`meta` |
+| `GET /api/snapshot?watch=…` | 폴링용 전체 스냅샷 (ETag → 304) |
+| `GET /api/history/:id?range=1w\|1m\|3m\|6m\|1y\|3y\|5y` | 지표·금리차·`flow-*`·`credit`·`vkospi`·6자리 종목코드(캔들) |
+| `GET /api/intraday/:id` | 국내 지수 1분봉 |
+| `GET /api/flows?market=KOSPI&days=30` · `/api/flows/weekly?weeks=104` | 투자자 누적·주간 수급 |
+| `GET /api/credit` · `/api/global?range=1y` · `/api/treemap?market=kospi&period=weekly` | 신용잔고 · 글로벌 비교 · 트리맵 |
+| `GET /api/dollar` · `/api/dollar/status` · `/api/dollar/history` | 달러 매수 타이밍 분석 · **DollarScope 호환** 형식 |
+| `GET /api/stocks/quotes?codes=` · `/api/stocks/search?q=` | 종목 시세 · 검색 |
+| `GET /api/health` | 소스별 상태·서킷 브레이커·캐시 적중률·구독자 수 |
+| `GET /api/series/:id` · `/api/quotes` · `/api/investors` · `/api/investors/weekly` · `/api/breadth` | 예전 API 호환 (스냅샷에서 즉시 응답) |
 
-전체 규격과 파싱 타깃은 **[api_spec.md](api_spec.md)** 참조.
+전체 규격과 업스트림 파싱 정보는 **[api_spec.md](api_spec.md)**, 지표 정의는 **[지표정리.md](지표정리.md)** 참조.
 
 ---
 
@@ -179,27 +164,31 @@ git push -u origin main
 
 ```
 macro/
-├─ server.js              Express 백엔드 (API 엔드포인트 + 캐싱)
+├─ server.js                Express — REST · SSE · ETag · 예전 API 호환
 ├─ pipeline/
-│  ├─ sources.js          외부 소스 저수준 페처 (Yahoo·네이버·TradingView)
-│  ├─ catalog.js          지표↔소스 매핑 · 업종 매핑 · 합성 시계열
-│  └─ check.js            데이터 파이프라인 점검 CLI
-├─ public/                프론트엔드 (정적 서빙)
-│  ├─ index.html          셸 (테마 · ApexCharts · Pretendard)
-│  ├─ app.jsx             앱 셸 (탭 · KPI · 드래그 · 자동갱신)
-│  ├─ data.js             지표 카탈로그 · 포맷터 · 라이브 페치 + 폴백
-│  ├─ charts.jsx          SVG 차트 + Apex 패널
-│  └─ widgets.jsx         위젯 카드 + 추가 모달
-├─ architecture.drawio    아키텍처 다이어그램 (편집용 원본)
-├─ render.yaml            Render 배포 설정 (Blueprint)
-├─ start.bat / start.ps1  로컬 실행 스크립트
-├─ api_spec.md            API 규격서
-└─ 실행방법.md            상세 실행 가이드
+│  ├─ config.js             환경 변수 설정
+│  ├─ http.js               HTTP 클라이언트 (keep-alive · 재시도 · 서킷 브레이커)
+│  ├─ cache.js              TTL · single-flight · SWR · 마지막 정상값 · 디스크 영속화
+│  ├─ market-hours.js       KST 장 운영 시간 · 휴장일 · 갱신 주기
+│  ├─ instruments.js        지표 카탈로그 (지표 ↔ 네이버 코드)
+│  ├─ collector.js          수집 루프 · 스냅샷 조립 · 토픽별 diff 발행
+│  ├─ analytics.js          이동평균 · 실현변동성 · 백분위 · 상관/베타
+│  ├─ score.js              MacroScore
+│  ├─ insights.js           위험 신호 · 시장 요약 · 공포탐욕
+│  ├─ dollar.js             원/달러 매수 타이밍 (DollarScope)
+│  ├─ check.js              데이터 소스 점검 CLI
+│  └─ sources/              naver.js (기본) · others.js (TradingView · KRX · Yahoo)
+├─ public/                  index.html · data.js · charts.jsx · panels.jsx · dollar.jsx · widgets.jsx · app.jsx
+├─ test/                    node:test + fixtures (실제 응답 축약본)
+├─ start.command / start.bat / start.ps1   원클릭 실행
+└─ render.yaml · architecture.drawio · api_spec.md · 지표정리.md · 실행방법.md
 ```
 
 ---
 
 ## 📝 참고
 
-- 무료 시계열 소스가 없는 일부 지표(기준금리·국고채 10년·VKOSPI 라인 등)는 결정론적 **합성 샘플**로 대체되며 UI에 **샘플** 배지로 표시됩니다.
-- 스크래핑은 네이버·Yahoo의 HTML/API 구조에 의존하므로, 소스 측 변경 시 일부 지표가 일시적으로 `unavailable`이 될 수 있습니다. `npm run check`로 상태를 확인하세요.
+- 네이버 증권 API 는 비공식이라 구조가 바뀔 수 있습니다. `npm run check` 로 소스별 상태를 바로 확인할 수 있고, 장애 시에는 마지막 정상값을 **지연** 배지와 함께 보여줍니다 (가짜 값을 만들지 않음).
+- 기준금리는 무료 일별 히스토리가 없어 현재값·최근 결정일만, 회사채 3년은 무료 소스가 없어져 제외했습니다.
+- 해외 지수는 거래소 규정상 일부 15분 지연, V-KOSPI 선물은 20분 지연입니다.
+- MacroScore·공포탐욕·달러 타이밍은 공개 데이터로 계산한 참고 지표이며, 투자 판단의 책임은 본인에게 있습니다.

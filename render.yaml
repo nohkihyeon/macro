@@ -13,6 +13,7 @@ services:
     region: singapore # 무료 플랜 중 한국에서 가장 가까운 리전
     buildCommand: npm install
     startCommand: node server.js
+    healthCheckPath: /api/health # 수집기 상태 확인 (Render 가 주기적으로 호출)
     autoDeploy: true # main 브랜치 push마다 자동 재배포
     envVars:
       - key: NODE_VERSION
