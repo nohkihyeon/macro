@@ -21,6 +21,7 @@ const H = require('./market-hours');
 const I = require('./instruments');
 const { computeScore, computeHistory } = require('./score');
 const { analyzeDollar } = require('./dollar');
+const tracker = require('./tracker');
 
 const MARKETS = ['KOSPI', 'KOSDAQ'];
 const BOARD_INDEX = { KOSPI: 'kospi', KOSDAQ: 'kosdaq' };
@@ -724,6 +725,12 @@ class Collector {
       const rows = A.asofJoin(live(a, quotes[spec.a]), live(b, quotes[spec.b]), (x, y) => round(x - y, 4));
       return { id, name: spec.name, kind: 'line', unit: '%p', rows: cut(rows), source: 'calc', stale: false };
     }
+    if (I.YAHOO_EXTRA[id]) {
+      const spec = I.YAHOO_EXTRA[id];
+      const result = await this.cache.get(`yahoo:${id}`, 900,
+        () => others.yahooDaily(this.http, spec.ticker, H.addDays(today, -800)), { persist: true, swr: true });
+      return { id, name: spec.name, kind: 'candle', unit: spec.unit, rows: cut(result.value), source: 'yahoo', stale: !!result.error };
+    }
     const inst = I.BY_ID[id];
     if (!inst) throw Object.assign(new Error(`지원하지 않는 지표: ${id}`), { status: 404 });
     if (!inst.history) return { id, name: inst.name, kind: 'line', unit: inst.unit, rows: [], source: 'none', stale: false };
@@ -732,6 +739,21 @@ class Collector {
       id, name: inst.name, kind: 'line', unit: inst.unit, rows: cut(rows), source: 'naver',
       stale: this.failed.has(`series:hist:${id}`),
     };
+  }
+
+  // 지표추적: 지표 id · 종목코드별 이동평균선 위치 · 20주선 · 이번 주 주봉 모양
+  async tracker(ids) {
+    const items = new Array(ids.length);
+    await runLimited(ids.map((id, i) => async () => {
+      try {
+        const h = await this.history(id, '1y');
+        const t = tracker.analyze(h.rows);
+        items[i] = t ? { id, name: h.name, unit: h.unit, kind: h.kind, stale: !!h.stale, ...t } : { id, name: h.name, error: '히스토리 부족' };
+      } catch (e) {
+        items[i] = { id, error: e.status === 404 ? '지원하지 않는 지표' : '데이터 소스 연결 실패' };
+      }
+    }), 4);
+    return { generated_at: H.kstIso(new Date()), items };
   }
 
   // 5년 범위의 시장지표는 기본 히스토리(1.2년)보다 깊게 한 번 더 받아 12시간 보관

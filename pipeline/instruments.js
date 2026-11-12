@@ -110,10 +110,20 @@ const GROUP_ORDER = {
 // 스코어·상관 계산에 1년 이상 히스토리가 필요한 지표 (marketindex 는 6페이지)
 const SCORE_SERIES = ['kospi', 'sox', 'ndx', 'vix', 'usdkrw', 'us10y'];
 
+// 지표추적 전용: 네이버에 없어 Yahoo 일봉으로만 받는 지표 (실시간 시세 없음, 15분 캐시)
+const YAHOO_EXTRA = {
+  btc: { name: '비트코인', ticker: 'BTC-USD', unit: 'usd', dec: 0 },
+  eth: { name: '이더리움', ticker: 'ETH-USD', unit: 'usd', dec: 0 },
+  usdidr: { name: '달러/루피아', ticker: 'IDR=X', unit: 'idr', dec: 0 },
+  orcl: { name: '오라클', ticker: 'ORCL', unit: 'usd', dec: 2 },
+  nvda: { name: '엔비디아', ticker: 'NVDA', unit: 'usd', dec: 2 },
+  softbank: { name: '소프트뱅크그룹', ticker: '9984.T', unit: 'jpy', dec: 0 },
+};
+
 // 예전 API(/api/quotes, /api/series) id 호환
 const LEGACY_IDS = { sp500: 'spx', nasdaq: 'ixic', nikkei: 'n225' };
 
 module.exports = {
   INSTRUMENTS, BY_ID, DOMESTIC_CODES, WORLD_CODES, SPREADS, YIELD_CURVE, GLOBAL_COMPARE,
-  GROUP_ORDER, SCORE_SERIES, LEGACY_IDS,
+  GROUP_ORDER, SCORE_SERIES, LEGACY_IDS, YAHOO_EXTRA,
 };

@@ -118,6 +118,13 @@ function createApp(collector) {
     });
   });
 
+  // GET /api/tracker?ids=kospi,kosdaq,005930 — 이동평균선(5·20·60일, 20주) 위치 · 돌파/이탈 · 주봉 꼬리
+  app.get('/api/tracker', live, async (req, res) => {
+    const ids = codes(req.query.ids).slice(0, 40);
+    if (!ids.length || !ids.every(id => /^[0-9A-Za-z-]{2,20}$/.test(id))) return fail(res, 422, '지표 id 또는 종목코드를 1~40개 입력하세요.');
+    res.json(await collector.tracker(ids));
+  });
+
   // ── 달러 매수 타이밍 (DollarScope 이식) ────────────────────────────────────
   app.get('/api/dollar', live, (req, res) => res.json(collector.state.dollar || { source: 'unavailable' }));
   // DollarScope 호환 형식 (예전 /api/status · /api/history)

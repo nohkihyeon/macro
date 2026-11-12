@@ -21,6 +21,7 @@ Node.js(Express) 서버의 **수집기**가 네이버 증권 **배치 JSON API**
 | **원자재** | WTI·브렌트·천연가스·금·은·구리·BDI |
 | **수급·심리** | 투자자 수급 보드("외인 N주 연속 순매도") · 외국인/기관/개인/연기금 · 신용잔고·예탁금 · 공포탐욕 · VKOSPI · VIX |
 | **매크로** | MacroScore(7팩터) · 위험 신호 8종 · 시장 요약 · KOSPI 상관·베타 · 수익률 곡선 |
+| **지표추적** | 지수·환율·금리·원자재·종목의 **5·20·60일선 / 20주선 위치**와 최근 돌파·이탈 · 이번 주 주봉 꼬리 · 오늘의 체크포인트 · 이평선 차트 · 내가 정한 지지·저항선 넘나들면 알림 |
 | **관심종목** | 종목 검색 → 실시간 시세 (서버가 모든 접속자의 관심종목을 1회 호출로 묶어 조회) |
 
 공통: 기간 **1일(1분봉)**·1주·1달·1년·5년 · 라인 차트 마지막 점 실시간 반영 · 값 변경 깜빡임 · 종목 클릭 시 캔들 차트 · 가격 알림(토스트 + 브라우저 알림) · CSV 내보내기 · 위젯 드래그 재배치 · 라이트/다크 · 한국식/미국식 등락 색 · 모바일 대응
@@ -152,6 +153,7 @@ PORT=3100 npm start   # 포트 고정 (사용 중이면 자동 전환 없이 에
 | `GET /api/flows?market=KOSPI&days=30` · `/api/flows/weekly?weeks=104` | 투자자 누적·주간 수급 |
 | `GET /api/credit` · `/api/global?range=1y` · `/api/treemap?market=kospi&period=weekly` | 신용잔고 · 글로벌 비교 · 트리맵 |
 | `GET /api/dollar` · `/api/dollar/status` · `/api/dollar/history` | 달러 매수 타이밍 분석 · **DollarScope 호환** 형식 |
+| `GET /api/tracker?ids=kospi,005930,…` | 지표추적: 5·20·60일선·20주선 위치, 마지막 돌파/이탈 시점, 배열, 이번 주 주봉 모양, 차트용 최근 130거래일 (최대 40개) |
 | `GET /api/stocks/quotes?codes=` · `/api/stocks/search?q=` | 종목 시세 · 검색 |
 | `GET /api/health` | 소스별 상태·서킷 브레이커·캐시 적중률·구독자 수 |
 | `GET /api/series/:id` · `/api/quotes` · `/api/investors` · `/api/investors/weekly` · `/api/breadth` | 예전 API 호환 (스냅샷에서 즉시 응답) |
@@ -176,9 +178,10 @@ macro/
 │  ├─ score.js              MacroScore
 │  ├─ insights.js           위험 신호 · 시장 요약 · 공포탐욕
 │  ├─ dollar.js             원/달러 매수 타이밍 (DollarScope)
+│  ├─ tracker.js            지표추적 (이동평균선 위치 · 돌파/이탈 · 주봉 꼬리)
 │  ├─ check.js              데이터 소스 점검 CLI
 │  └─ sources/              naver.js (기본) · others.js (TradingView · KRX · Yahoo)
-├─ public/                  index.html · data.js · charts.jsx · panels.jsx · dollar.jsx · widgets.jsx · app.jsx
+├─ public/                  index.html · data.js · charts.jsx · panels.jsx · dollar.jsx · tracker.jsx · widgets.jsx · app.jsx
 ├─ test/                    node:test + fixtures (실제 응답 축약본)
 ├─ start.command / start.bat / start.ps1   원클릭 실행
 └─ render.yaml · architecture.drawio · api_spec.md · 지표정리.md · 실행방법.md

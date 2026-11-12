@@ -140,6 +140,15 @@ const INDICATORS = [
   { id: 'correlation', cat: 'macro', name: 'KOSPI 상관·베타', alias: '상관관계 민감도', kind: 'correlation' },
   // 관심
   { id: 'watchlist', cat: 'watch', name: '관심종목', alias: '종목 검색', kind: 'watchlist' },
+  // 지표추적 (알상무 지표추적자 방식: 이동평균선 + 지지·저항 기준선)
+  { id: 'tracker', cat: 'tracker', name: '이동평균선 보드', alias: '지표추적 5일선 20일선 60일선 20주선 돌파 이탈', kind: 'tracker', span: 2,
+    sub: '5·20·60일선과 20주선 대비 위치(▲위 ▼아래, 금리는 bp) · 최근 돌파/이탈 · 이번 주 주봉 · 행을 누르면 차트' },
+  { id: 'tracker-brief', cat: 'tracker', name: '오늘의 체크포인트', alias: '지표추적 브리핑', kind: 'tracker-brief',
+    sub: '최근 이평선 돌파·이탈, 기준선 2% 이내 근접, 주봉 꼬리를 중요도 순으로' },
+  { id: 'tracker-chart', cat: 'tracker', name: '이평선 · 기준선 차트', alias: '지표추적 차트', kind: 'tracker-chart', span: 2,
+    sub: '종가 + 5·20·60일선 + 20주선(점선) + 내가 정한 지지·저항선' },
+  { id: 'tracker-levels', cat: 'tracker', name: '지지·저항 기준선', alias: '지표추적 기준선 알림', kind: 'tracker-levels',
+    sub: '가격을 넣어 두면 실시간 시세가 넘나들 때 알림 · 추적 대상 추가/삭제' },
 ];
 
 const IND_BY_ID = Object.fromEntries(INDICATORS.map(i => [i.id, i]));

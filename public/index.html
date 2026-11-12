@@ -434,6 +434,51 @@
   .dl-bank-tip { margin-top: 8px; font-size: 11.5px; color: var(--text-3); line-height: 1.6; }
   @media (max-width: 860px) { .dl-verdict { grid-template-columns: minmax(0, 1fr); } }
 
+  /* ── 지표추적 탭 ── */
+  .trk-wrap { overflow-x: auto; margin: 0 -4px; }
+  .trk-table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; min-width: 760px; }
+  .trk-table th { text-align: left; font-size: 11px; font-weight: 700; color: var(--text-3); padding: 6px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .trk-table td { padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
+  .trk-table td b { font-weight: 700; display: block; }
+  .trk-table td small { display: block; font-size: 11px; color: var(--text-3); margin-top: 1px; }
+  .trk-table tbody tr { cursor: pointer; }
+  .trk-table tbody tr:hover { background: var(--hover); }
+  .trk-table tbody tr.sel { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+  .trk-table tbody tr:last-child td { border-bottom: none; }
+  .trk-name { font-weight: 700; color: var(--text); }
+  .trk-name em { font-style: normal; font-size: 10.5px; }
+  .trk-muted { color: var(--text-3); font-weight: 500; }
+  .trk-table td small.trk-cross-up, .trk-table td small.trk-cross-down { font-weight: 700; }
+  .trk-tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: var(--hover); color: var(--text-2); }
+  .trk-tag.hot { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
+  .trk-tag.type-support { background: color-mix(in srgb, var(--ok) 13%, transparent); color: var(--ok); }
+  .trk-tag.type-resistance { background: color-mix(in srgb, var(--bad) 13%, transparent); color: var(--bad); }
+  .trk-point { grid-template-columns: 10px 86px 1fr; }
+  .trk-tools { justify-content: flex-start; }
+  .trk-select, .trk-form select, .trk-form input, .trk-add select { min-width: 0; background: var(--hover); border: 1px solid transparent; border-radius: 9px; padding: 7px 8px; font-size: 13px; color: var(--text); outline: none; }
+  .trk-levels { display: flex; flex-direction: column; gap: 12px; }
+  .trk-form { display: grid; grid-template-columns: 1.2fr .8fr 1fr 1.3fr auto; gap: 6px; }
+  .trk-form .primary-btn { margin: 0; padding: 7px 12px; }
+  .trk-level-list { display: flex; flex-direction: column; max-height: 300px; overflow-y: auto; }
+  .trk-level { display: grid; grid-template-columns: 78px 38px 82px 96px 1fr 26px 22px; gap: 6px; align-items: center; padding: 5px 2px; border-bottom: 1px solid var(--line); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .trk-level:last-child { border-bottom: none; }
+  .trk-level-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .trk-level-price { text-align: right; }
+  .trk-level-st { font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .trk-level-note { color: var(--text-3); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .trk-level .icon-btn { width: 24px; height: 24px; }
+  .trk-bell { color: var(--text-3); }
+  .trk-bell.on { color: var(--accent); }
+  .trk-subhead { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 800; }
+  .trk-subhead .text-btn { margin-left: auto; font-size: 12px; padding: 4px 6px; }
+  .trk-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 8px; }
+  .trk-chip { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 600; padding: 3px 4px 3px 9px; border-radius: 999px; background: var(--hover); }
+  .trk-chip button { width: 18px; height: 18px; border-radius: 50%; color: var(--text-3); font-size: 13px; line-height: 1; }
+  .trk-chip button:hover { color: var(--text); background: var(--line); }
+  .trk-add { display: grid; grid-template-columns: 1fr 1.4fr; gap: 6px; }
+  .trk-add .watch-search { position: relative; }
+  .trk-add .watch-search input { width: 100%; }
+
   /* ── 반응형 ── */
   @media (max-width: 1100px) {
     .kpi-strip { grid-template-columns: repeat(3, 1fr); }
@@ -460,6 +505,11 @@
     .foot-note { padding: 0 14px; }
     .alert-form { grid-template-columns: 1fr 1fr; }
     .board-ma { grid-template-columns: repeat(2, 1fr); }
+    .trk-form { grid-template-columns: 1fr 1fr; }
+    .trk-form .primary-btn { grid-column: 1 / -1; }
+    .trk-level { grid-template-columns: 1fr 38px auto 26px 22px; }
+    .trk-level-st, .trk-level-note { grid-column: 1 / -3; }
+    .trk-add { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -476,6 +526,7 @@
 <script type="text/babel" src="charts.jsx"></script>
 <script type="text/babel" src="panels.jsx"></script>
 <script type="text/babel" src="dollar.jsx"></script>
+<script type="text/babel" src="tracker.jsx"></script>
 <script type="text/babel" src="widgets.jsx"></script>
 <script type="text/babel" src="app.jsx"></script>
 </body>

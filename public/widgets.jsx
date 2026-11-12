@@ -7,7 +7,7 @@ const { useState: wState, useEffect: wEffect, useMemo: wMemo, useRef: wRef, useC
 
 const CAT_LABELS = {
   market: '시장', global: '글로벌', rates: '금리', fx: '환율', commodity: '원자재',
-  flow: '수급', sentiment: '심리', macro: '매크로', watch: '관심', dollar: '달러',
+  flow: '수급', sentiment: '심리', macro: '매크로', watch: '관심', dollar: '달러', tracker: '지표추적',
 };
 
 function DiffArrow({ up }) { return <span className="diff-arrow">{up ? '▲' : '▼'}</span>; }
@@ -209,9 +209,10 @@ function PanelBody({ ind, periodKey, colors, compact, themeKey }) {
     case 'summary': return <SummaryPanel />;
     case 'correlation': return <CorrelationPanel colors={colors} />;
     case 'watchlist': return <WatchlistPanel colors={colors} />;
-    default: return window.DollarPanels && window.DollarPanels[ind.kind]
-      ? React.createElement(window.DollarPanels[ind.kind], { ind, periodKey, colors, compact, themeKey })
-      : <ChartEmpty height={panelH} />;
+    default: {
+      const Comp = (window.DollarPanels && window.DollarPanels[ind.kind]) || (window.TrackerPanels && window.TrackerPanels[ind.kind]);
+      return Comp ? React.createElement(Comp, { ind, periodKey, colors, compact, themeKey }) : <ChartEmpty height={panelH} />;
+    }
   }
 }
 

@@ -14,6 +14,7 @@ const TABS = [
   { key: 'commodity', label: '원자재' },
   { key: 'flow',      label: '수급·심리' },
   { key: 'macro',     label: '매크로' },
+  { key: 'tracker',   label: '지표추적' },
   { key: 'watch',     label: '관심종목' },
 ];
 
@@ -26,6 +27,7 @@ const DEFAULT_WIDGETS = {
   commodity: ['wti', 'brent', 'gold', 'silver', 'copper', 'natgas', 'bdi'],
   flow:      ['flow-board', 'flow-foreign', 'flow-inst', 'flow-retail', 'flow-pension', 'credit', 'deposit', 'feargreed', 'vkospi', 'vix', 'flow-cum', 'foreign-kospi'],
   macro:     ['macroscore', 'signals', 'summary', 'correlation', 'yield-curve', 'uskr10y', 'us-term', 'feargreed'],
+  tracker:   ['tracker', 'tracker-brief', 'tracker-chart', 'tracker-levels'],
   watch:     ['watchlist', 'movers', 'themes', 'breadth'],
 };
 
@@ -166,8 +168,16 @@ function App() {
   aEffect(() => { saveState({ period }); }, [period]);
   aEffect(() => { saveState({ widgets }); }, [widgets]);
   aEffect(() => { document.documentElement.style.setProperty('--accent', t.accent); }, [t.accent]);
-  aEffect(() => { saveLocal('signalboard-watch-v1', watch); LiveStore.setWatch(watch.map(w => w.code)); }, [watch]);
-  aEffect(() => { saveLocal('signalboard-alerts-v1', rules); LiveStore.setBackground(rules.some(r => r.enabled)); }, [rules]);
+  // 지표추적 대상 종목도 실시간 시세를 받도록 구독에 합친다 (서버 상한 30개)
+  const tracked = useTracker();
+  const trackedCodes = trackerStockCodes(tracked).join(',');
+  aEffect(() => { saveLocal('signalboard-watch-v1', watch); }, [watch]);
+  aEffect(() => {
+    LiveStore.setWatch([...new Set([...watch.map(w => w.code), ...(trackedCodes ? trackedCodes.split(',') : [])])].slice(0, 30));
+  }, [watch, trackedCodes]);
+  // 켜진 가격 알림이나 지표추적 기준선 알림이 있으면 탭이 백그라운드여도 시세를 계속 받는다
+  const levelAlerts = tracked.levels.some(l => l.alert);
+  aEffect(() => { saveLocal('signalboard-alerts-v1', rules); LiveStore.setBackground(rules.some(r => r.enabled) || levelAlerts); }, [rules, levelAlerts]);
   aEffect(() => { LiveStore.setPaused(paused); }, [paused]);
   aEffect(() => {
     const onHash = () => { const h = location.hash.replace('#', ''); if (TABS.some(x => x.key === h)) setTab(h); };
@@ -175,6 +185,7 @@ function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
   useAlerts(rules);
+  useTrackerAlerts();
   useTitle();
 
   const kr = t.colorRule === '한국식';

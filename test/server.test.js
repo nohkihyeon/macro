@@ -68,6 +68,23 @@ test('수집기 → API 통합', async t => {
     assert.equal((await fetch(`${base}/api/history/nope`)).status, 404);
   });
 
+  await t.test('지표추적: 지표 · 종목 · 미지원 · 잘못된 입력', async () => {
+    const res = await (await fetch(`${base}/api/tracker?ids=kospi,005930,nope,btc`)).json();
+    assert.equal(res.items.length, 4);
+    const [kospi, stock, nope, btc] = res.items;
+    assert.equal(btc.id, 'btc');
+    assert.ok(btc.error || btc.ma, 'Yahoo 지표: 실패해도 항목은 돌려준다');
+    assert.equal(kospi.id, 'kospi');
+    assert.ok(kospi.ma.ma5 && typeof kospi.ma.ma5.above === 'boolean');
+    assert.ok(kospi.week && kospi.week.shape);
+    assert.ok(kospi.series.length > 0);
+    assert.equal(stock.kind, 'candle');
+    assert.ok(stock.price != null);
+    assert.ok(nope.error);
+    assert.equal((await fetch(`${base}/api/tracker`)).status, 422);
+    assert.equal((await fetch(`${base}/api/tracker?ids=a/b`)).status, 422);
+  });
+
   await t.test('예전 API 호환', async () => {
     const q = await (await fetch(`${base}/api/quotes?ids=kospi,sp500,nasdaq`)).json();
     assert.equal(q.kospi.source, 'live');
