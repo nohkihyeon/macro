@@ -31,6 +31,20 @@ const TRACKER_DEFAULT = {
   selected: 'kospi',
 };
 
+// 참고용 지표 모음: 지표추적자 영상에서 짚은 지표와, 시장 참여자들이 흔히 같이 보는 지표를 테마별로 묶었다.
+// 눌러서 추적 대상에 추가한다 (이미 있으면 표시만). id 는 지표 카탈로그·TRK_EXTRA·종목코드와 같다.
+const TRACKER_PRESETS = [
+  { key: 'video', label: '지표추적자 영상 기본', note: '영상에서 짚은 지표 전체', ids: TRACKER_DEFAULT.items.map(i => i.id) },
+  { key: 'kr', label: '한국 증시', note: '코스피·코스닥과 대형주, 외국인 눈치 보는 환율', ids: ['kospi', 'kosdaq', 'kpi200', '005930', '000660', 'usdkrw'] },
+  { key: 'us', label: '미국 증시', note: '주요 지수와 반도체, 공포지수', ids: ['spx', 'ixic', 'ndx', 'dji', 'sox', 'vix'] },
+  { key: 'asia', label: '아시아 증시', note: '일본·중화권·유럽 지수', ids: ['n225', 'hsi', 'ssec', 'dax'] },
+  { key: 'fx', label: '환율·달러', note: '달러 강약, 엔 캐리, 원화', ids: ['dxy', 'usdkrw', 'usdjpy', 'jpykrw', 'usdidr'] },
+  { key: 'rates', label: '금리', note: '미국채·국고채 만기별', ids: ['us2y', 'us10y', 'us30y', 'ktb3', 'ktb10'] },
+  { key: 'commod', label: '원자재', note: '유가·금·은·구리·가스', ids: ['wti', 'brent', 'gold', 'silver', 'copper', 'natgas'] },
+  { key: 'bigtech', label: '빅테크·AI', note: 'AI 투자 심리를 보는 종목', ids: ['nvda', 'orcl', 'softbank', 'sox'] },
+  { key: 'crypto', label: '가상자산', note: '위험자산 선호도', ids: ['btc', 'eth'] },
+];
+
 const TrackerStore = (() => {
   let state = loadLocal(TRACKER_KEY, null) || TRACKER_DEFAULT;
   const listeners = new Set();
@@ -371,6 +385,14 @@ function TrackerLevelsPanel({ colors }) {
     TrackerStore.set(s => ({ ...s, items: [...s.items, it] }));
     setQ(''); setResults([]);
   };
+  const [openPreset, setOpenPreset] = tState(false);
+  const presetName = id => trName({ id, name: id === '005930' ? '삼성전자' : id === '000660' ? 'SK하이닉스' : undefined }, byId[id]);
+  const addMany = ids => TrackerStore.set(s => {
+    const have = new Set(s.items.map(i => i.id));
+    const next = [...s.items];
+    for (const id of ids) if (!have.has(id) && next.length < 40) { next.push(id === '005930' ? { id, name: '삼성전자' } : id === '000660' ? { id, name: 'SK하이닉스' } : { id }); have.add(id); }
+    return { ...s, items: next };
+  });
   const removeItem = id => TrackerStore.set(s => ({ ...s, items: s.items.filter(x => x.id !== id), levels: s.levels.filter(l => l.target !== id) }));
   const itemName = id => trName(tr.items.find(i => i.id === id), byId[id]);
 
@@ -423,6 +445,26 @@ function TrackerLevelsPanel({ colors }) {
               <button title="추적 대상에서 빼기 (기준선도 함께 삭제)" onClick={() => removeItem(i.id)}>×</button>
             </span>
           ))}
+        </div>
+        <div className="trk-presets">
+          <button className="text-btn" onClick={() => setOpenPreset(v => !v)}>{openPreset ? '▾' : '▸'} 참고용 지표 모음 (사람들이 주로 보는 지표)</button>
+          {openPreset && TRACKER_PRESETS.map(g => {
+            const missing = g.ids.filter(id => !tr.items.some(x => x.id === id));
+            return (
+              <div key={g.key} className="trk-preset">
+                <div className="trk-preset-head">
+                  <b>{g.label}</b><span className="trk-muted">{g.note}</span>
+                  <button className="text-btn" disabled={!missing.length} onClick={() => addMany(g.ids)}>{missing.length ? `모두 추가 (${missing.length})` : '모두 추가됨'}</button>
+                </div>
+                <div className="trk-chips">
+                  {g.ids.map(id => {
+                    const on = tr.items.some(x => x.id === id);
+                    return <button key={id} className={`trk-chip trk-chip-pick ${on ? 'on' : ''}`} disabled={on} onClick={() => addMany([id])}>{on ? '✓ ' : '+ '}{presetName(id)}</button>;
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
         <div className="trk-add">
           <select value="" onChange={e => e.target.value && addItem({ id: e.target.value })}>
