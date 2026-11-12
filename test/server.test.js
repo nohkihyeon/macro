@@ -55,7 +55,8 @@ test('수집기 → API 통합', async t => {
   });
 
   await t.test('히스토리: 지표 · 금리차 · 수급 · 종목 · 미지원', async () => {
-    const kospi = await (await fetch(`${base}/api/history/kospi?range=1m`)).json();
+    // 픽스처가 고정된 날짜라 1m 은 시간이 지나면 비어 간다 → 1y 로 본다
+    const kospi = await (await fetch(`${base}/api/history/kospi?range=1y`)).json();
     assert.equal(kospi.kind, 'line');
     assert.ok(kospi.rows.length > 15);
     const flow = await (await fetch(`${base}/api/history/flow-foreign?range=1m`)).json();

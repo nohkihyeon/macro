@@ -14,6 +14,8 @@ const DAILY_PERIODS = [5, 20, 60];
 const WEEKLY_PERIOD = 20;
 const SERIES_TAIL = 130;     // 차트용으로 돌려줄 최근 거래일 수
 const WICK_ALERT = 0.5;      // 꼬리가 주봉 전체 범위의 절반 이상이면 의미 있는 꼬리로 본다
+const PROFILE_BINS = 24;     // 매물대 가격 구간 수
+const PROFILE_RANGES = { '1m': 22, '3m': 66, '6m': 130 };  // 화면의 1달·3달·6달과 같은 봉 수
 
 // 이동평균 시계열 (앞쪽 n-1 개는 null)
 function maSeries(values, n) {
@@ -89,6 +91,36 @@ function candleShape(bar) {
   };
 }
 
+// 매물대: 최근 n봉의 거래량을 가격대별로 쌓는다. 하루 거래량은 그날 저가~고가 구간에 고르게 나눈다.
+// 거래량이 없는 지표(지수·환율 등)나 거래량 있는 봉이 80% 미만이면 null.
+// 반환: { from, to, poc, bins:[{lo, hi, share(최대 구간=1), pct(전체 대비 %)}] }
+function volumeProfile(rows, n, binCount = PROFILE_BINS) {
+  const win = rows.slice(-n);
+  const used = win.filter(r => r.volume > 0);
+  if (used.length < 5 || used.length < win.length * 0.8) return null;
+  const lowOf = r => (r.low != null ? r.low : r.close);
+  const highOf = r => (r.high != null ? r.high : r.close);
+  const lo = Math.min(...used.map(lowOf)), hi = Math.max(...used.map(highOf));
+  if (!(hi > lo)) return null;
+  const step = (hi - lo) / binCount;
+  const idx = p => Math.min(binCount - 1, Math.max(0, Math.floor((p - lo) / step)));
+  const vols = new Array(binCount).fill(0);
+  for (const r of used) {
+    // 고가가 구간 경계에 정확히 걸리면 윗 구간으로 번지지 않게 올림 - 1
+    const a = idx(lowOf(r));
+    const b = Math.min(binCount - 1, Math.max(a, Math.ceil((highOf(r) - lo) / step) - 1));
+    for (let i = a; i <= b; i++) vols[i] += r.volume / (b - a + 1);
+  }
+  const total = vols.reduce((s, v) => s + v, 0);
+  const max = Math.max(...vols);
+  const bins = vols.map((v, i) => ({
+    lo: A.round(lo + step * i, 4), hi: A.round(lo + step * (i + 1), 4),
+    share: A.round(v / max, 3), pct: A.round((v / total) * 100, 1),
+  }));
+  const poc = bins[vols.indexOf(max)];
+  return { from: used[0].date, to: used[used.length - 1].date, poc, bins };
+}
+
 function alignment(ma) {
   const [a, b, c] = DAILY_PERIODS.map(p => ma[`ma${p}`] && ma[`ma${p}`].value);
   if (a == null || b == null || c == null) return null;
@@ -133,6 +165,11 @@ function analyze(rows) {
     line_count: lines.length,
     week: candleShape(weeks[weeks.length - 1]),
     prev_week: candleShape(weeks[weeks.length - 2]),
+    profile: (() => {
+      const out = {};
+      for (const [k, n] of Object.entries(PROFILE_RANGES)) out[k] = volumeProfile(clean, n);
+      return out['6m'] || out['3m'] || out['1m'] ? out : null;
+    })(),
     series: tail.map((r, i) => ({
       date: r.date, close: r.close,
       ma5: A.round(maCols[5][offset + i], 4), ma20: A.round(maCols[20][offset + i], 4), ma60: A.round(maCols[60][offset + i], 4),
@@ -141,4 +178,4 @@ function analyze(rows) {
   };
 }
 
-module.exports = { analyze, maSeries, linePosition, toWeekly, candleShape, DAILY_PERIODS, WEEKLY_PERIOD, WICK_ALERT };
+module.exports = { analyze, maSeries, linePosition, toWeekly, candleShape, volumeProfile, DAILY_PERIODS, WEEKLY_PERIOD, WICK_ALERT };

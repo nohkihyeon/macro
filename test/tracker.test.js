@@ -63,6 +63,31 @@ test('analyze: 상승 추세면 정배열 · 모든 선 위 · 20주선 계산',
   assert.ok(t.series[t.series.length - 1].ma20w != null);
 });
 
+test('volumeProfile: 거래량이 몰린 가격대가 최다 구간(poc)', () => {
+  // 100~110 에서 거래량 1000, 110~120 에서 100 → 매물대 최다는 아래쪽
+  const rows = days(20).map((date, i) => (i < 15
+    ? { date, open: 105, high: 110, low: 100, close: 105, volume: 1000 }
+    : { date, open: 115, high: 120, low: 110, close: 115, volume: 100 }));
+  const p = T.volumeProfile(rows, 20, 4);
+  assert.equal(p.bins.length, 4);
+  assert.ok(p.poc.hi <= 110.0001);
+  assert.equal(p.poc.share, 1);
+  const pct = p.bins.reduce((s, b) => s + b.pct, 0);
+  assert.ok(Math.abs(pct - 100) < 0.5);
+});
+
+test('volumeProfile: 거래량이 없으면 null, analyze 도 profile=null', () => {
+  assert.equal(T.volumeProfile(rowsOf([1, 2, 3, 4, 5, 6, 7, 8]), 8), null);
+  assert.equal(T.analyze(rowsOf([1, 2, 3, 4, 5, 6])).profile, null);
+});
+
+test('analyze: 거래량이 있으면 1달·3달·6달 매물대를 돌려준다', () => {
+  const rows = days(160).map((date, i) => ({ date, open: 100 + i, high: 102 + i, low: 99 + i, close: 101 + i, volume: 500 }));
+  const t = T.analyze(rows);
+  assert.ok(t.profile['3m'].bins.length > 0);
+  assert.ok(t.profile['1m'].poc.lo >= t.profile['3m'].bins[0].lo);
+});
+
 test('analyze: 데이터가 짧으면 긴 선은 null, 2개 미만이면 null', () => {
   const t = T.analyze(rowsOf([1, 2, 3, 4, 5, 6]));
   assert.ok(t.ma.ma5);

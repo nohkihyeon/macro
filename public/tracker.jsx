@@ -257,9 +257,11 @@ const TRK_LINE_COLORS = ['#3B6EF5', '#E5484D', '#F5A623', '#2A9D6E', '#7A5AE0'];
 function TrackerChartPanel({ compact, themeKey, colors }) {
   const { tr, sample, res, byId } = useTrackerData();
   const [range, setRange] = tState('3m');
+  const [showVp, setShowVp] = tState(true);
   const id = tr.items.some(i => i.id === tr.selected) ? tr.selected : tr.items[0] && tr.items[0].id;
   const item = tr.items.find(i => i.id === id);
   const row = byId[id];
+  const prof = row && row.profile ? row.profile[range] : null;   // 거래량 없는 지표(지수·환율)는 null
   const height = compact ? 300 : 360;
   const levels = tMemo(() => tr.levels.filter(l => l.target === id), [tr.levels, id]);
   const view = tMemo(() => {
@@ -276,6 +278,10 @@ function TrackerChartPanel({ compact, themeKey, colors }) {
         {tr.items.map(i => <option key={i.id} value={i.id}>{trName(i, byId[i.id])}</option>)}
       </select>
       <div className="mini-seg">{TRK_RANGES.map(([k, label]) => <button key={k} className={range === k ? 'active' : ''} onClick={() => setRange(k)}>{label}</button>)}</div>
+      <div className="mini-seg">
+        <button className={showVp && prof ? 'active' : ''} disabled={!prof} onClick={() => setShowVp(v => !v)}
+          title={prof ? '가격대별 거래량이 쌓인 구간 (진할수록 많이 거래됨)' : '거래량이 없는 지표라 매물대를 만들 수 없어요'}>매물대</button>
+      </div>
       <span className="dl-legend">
         {['종가', '5일', '20일', '60일', '20주'].map((l, i) => <React.Fragment key={l}><i style={{ background: TRK_LINE_COLORS[i] }}></i>{l} </React.Fragment>)}
       </span>
@@ -287,10 +293,19 @@ function TrackerChartPanel({ compact, themeKey, colors }) {
   // 화면 범위에서 너무 먼 기준선은 그리지 않는다 (축이 눌려 차트가 안 보이는 것 방지)
   const shown = levels.filter(l => l.price >= lo - pad && l.price <= hi + pad);
   const levelColor = l => (l.type === 'support' ? '#2A9D6E' : l.type === 'resistance' ? '#E5484D' : '#8B95A1');
+  // 매물대: 가격대별 띠. 거래량이 많은 구간일수록 진하게, 최대 거래 구간(POC)은 라벨로 표시
+  const vp = showVp && prof ? prof : null;
+  const vpBands = vp ? vp.bins.filter(b => b.share >= 0.08).map(b => ({
+    y: b.lo, y2: b.hi, borderColor: 'transparent', fillColor: '#7A5AE0', opacity: 0.06 + 0.3 * b.share,
+    ...(b === vp.poc ? { label: { text: `매물대 최다 ${fmtNum(b.lo, dec)}~${fmtNum(b.hi, dec)} (${b.pct}%)`, position: 'right', textAnchor: 'end', style: { color: '#fff', background: '#7A5AE0', fontSize: '10px' } } } : {}),
+  })) : [];
+  // 띠가 축 밖으로 잘리지 않게 축 범위를 매물대까지 넓힌다
+  const axisMin = vp ? Math.min(lo, vp.bins[0].lo) : undefined;
+  const axisMax = vp ? Math.max(hi, vp.bins[vp.bins.length - 1].hi) : undefined;
   return (
     <div>
       {tools}
-      <ApexBase height={height - 40} deps={[view, levels, id]} rebuildKey={themeKey} build={() => ({
+      <ApexBase height={height - 40} deps={[view, levels, id, vp]} rebuildKey={themeKey} build={() => ({
         series: [
           { name: trName(item, row), data: vals },
           { name: '5일선', data: view.map(r => r.ma5) },
@@ -305,13 +320,13 @@ function TrackerChartPanel({ compact, themeKey, colors }) {
         legend: { show: false },
         dataLabels: { enabled: false },
         xaxis: { categories: view.map(r => r.date), tickAmount: 6, labels: { style: { colors: t.text3 }, rotate: 0, formatter: v => (typeof v === 'string' ? v.slice(5).replace('-', '.') : v) }, tooltip: { enabled: false } },
-        yaxis: { opposite: true, labels: { formatter: v => (v == null ? '' : fmtNum(v, dec)), style: { colors: t.text3 } } },
+        yaxis: { opposite: true, min: axisMin, max: axisMax, labels: { formatter: v => (v == null ? '' : fmtNum(v, dec)), style: { colors: t.text3 } } },
         grid: { borderColor: t.line, strokeDashArray: 4 },
         annotations: {
-          yaxis: shown.map(l => ({
+          yaxis: [...vpBands, ...shown.map(l => ({
             y: l.price, borderColor: levelColor(l), strokeDashArray: 3,
             label: { text: `${LEVEL_TYPES[l.type]} ${fmtNum(l.price, dec)}`, position: 'left', textAnchor: 'start', style: { color: '#fff', background: levelColor(l), fontSize: '10px' } },
-          })),
+          }))],
         },
         tooltip: { theme: t.mode, shared: true, y: { formatter: v => (v == null ? '–' : fmtNum(v, dec)) } },
       })} />

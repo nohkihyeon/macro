@@ -289,6 +289,8 @@ class Collector {
 
   _needsFull(prev, today, minRows) {
     if (!prev || prev.length < minRows) return true;
+    // 거래량(매물대용)이 저장되기 전에 쌓인 히스토리는 한 번 전체를 다시 받는다
+    if (prev[prev.length - 1].open != null && !prev.some(r => r.volume != null)) return true;
     const last = prev[prev.length - 1].date;
     return (new Date(today) - new Date(last)) / 86400000 > INCREMENTAL_DAYS;
   }
@@ -318,7 +320,7 @@ class Collector {
         full = true;
       }
       const slim = rows.map(r => (h.type === 'chart'
-        ? { date: r.date, open: r.open, high: r.high, low: r.low, close: r.close }
+        ? { date: r.date, open: r.open, high: r.high, low: r.low, close: r.close, volume: r.volume }
         : { date: r.date, close: r.close }));
       // 증분 조회분은 기존 히스토리에 병합한다 (같은 날짜는 새 값 우선)
       const merged = full && !prev.length ? slim : A.mergeRows(prev, slim);
